@@ -1,0 +1,118 @@
+# Contributing to Stacks
+
+Thank you for your interest in contributing! Stacks is an open-source project and we welcome contributions of all kinds — bug fixes, new features, documentation improvements, and more.
+
+## Getting Started
+
+### 1. Set up your development environment
+
+```bash
+git clone https://github.com/CSP-Library/stacks
+cd stacks
+./scripts/setup-dev.sh
+```
+
+See the [development guide](docs/development/getting-started.md) for detailed setup instructions.
+
+### 2. Find something to work on
+
+- Check [`good first issue`](https://github.com/CSP-Library/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for beginner-friendly tasks
+- Check the [v0.1 milestone](https://github.com/CSP-Library/stacks/milestone/1) for priority work
+- Open an issue to discuss a new feature before building it
+
+### 3. Make your changes
+
+- Create a branch: `git checkout -b your-feature-name`
+- Write tests for new functionality
+- Ensure existing tests pass: `cd backend && pytest`
+- Run linting: `cd backend && ruff check .`
+- Run frontend typecheck: `cd frontend && npm run typecheck`
+
+### 4. Submit a pull request
+
+- Fill in the pull request template
+- Link to any relevant issues
+- PRs require passing CI before merge
+
+## Development Guide
+
+### Backend
+
+```bash
+cd backend
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run with coverage
+pytest --cov=app
+
+# Lint
+ruff check .
+
+# Type check
+mypy app
+
+# Generate a new migration after changing models
+alembic revision --autogenerate -m "describe your change"
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+
+# Dev server (proxies API to localhost:8000)
+npm run dev
+
+# Typecheck
+npm run typecheck
+
+# Lint
+npm run lint
+
+# Regenerate TypeScript types from API spec (requires backend running)
+npm run generate-types
+```
+
+### Database Migrations
+
+Migrations run explicitly — they never run automatically on startup.
+
+```bash
+# Apply all pending migrations
+docker compose exec app alembic upgrade head
+
+# Create a new migration after changing SQLAlchemy models
+docker compose exec app alembic revision --autogenerate -m "add widget table"
+
+# Downgrade one step
+docker compose exec app alembic downgrade -1
+```
+
+### Adding a New Import Handler
+
+1. Create `backend/app/importers/your_source.py`
+2. Extend `ImportHandler` from `app.importers.base`
+3. Implement `fetch()` and `normalize()`
+4. Register it in `app/importers/__init__.py`
+5. Add a router endpoint in `app/routers/imports.py`
+6. Add tests in `tests/test_importers/`
+
+See `app/importers/z3950.py` for a reference implementation.
+
+## Code Style
+
+- **Python**: [Ruff](https://github.com/astral-sh/ruff) for linting and formatting. Line length: 100.
+- **TypeScript**: ESLint with React Hooks plugin.
+- **Commits**: Conventional commits preferred (`feat:`, `fix:`, `docs:`, `chore:`)
+
+## Architecture Decisions
+
+Before making significant architectural changes, please read [docs/architecture/design.md](docs/architecture/design.md). New significant decisions should be recorded as ADRs in `docs/architecture/`.
+
+## Questions?
+
+Open a [GitHub Discussion](https://github.com/CSP-Library/stacks/discussions) or file an issue. We're happy to help.
