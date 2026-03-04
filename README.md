@@ -4,9 +4,10 @@
 
 Stacks lets instructors and librarians build reading lists that embed directly in any LMS via LTI 1.3.
 
-> **Note:** Stacks is currently a proof of concept. It is not yet production-ready. Contributions, feedback, and institutional interest are welcome. It is 100% vibe-coded using Claude.
+> **Note:** Stacks is currently a proof of concept. It is not yet production-ready. Contributions, feedback, and institutional interest are welcome.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![CI](https://github.com/CSP-Library/stacks/actions/workflows/ci.yml/badge.svg)](https://github.com/CSP-Library/stacks/actions/workflows/ci.yml)
 
 ---
 

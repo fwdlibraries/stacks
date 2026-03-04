@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # setup-dev.sh — One-command development environment setup
-# Usage: ./scripts/setup-dev.sh
+# Usage: ./scripts/setup-dev.sh  OR  cd scripts && ./setup-dev.sh  OR  bash scripts/setup-dev.sh
 
 set -euo pipefail
+
+# Resolve repo root regardless of where the script is called from
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${REPO_ROOT}"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -19,6 +24,8 @@ echo "  ╚════██║   ██║   ██╔══██║██║
 echo "  ███████║   ██║   ██║  ██║╚██████╗██║  ██╗███████║ "
 echo "  ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝"
 echo "  Dev environment setup"
+echo ""
+echo "  Repo root: ${REPO_ROOT}"
 echo ""
 
 # Check prerequisites
@@ -43,7 +50,7 @@ fi
 
 # Install frontend dependencies
 info "Installing frontend dependencies..."
-cd frontend && npm install && cd ..
+cd frontend && npm install && cd "${REPO_ROOT}"
 
 # Start services
 info "Starting Docker services..."
