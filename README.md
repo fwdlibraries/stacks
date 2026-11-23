@@ -7,7 +7,6 @@ Stacks lets instructors and librarians build reading lists that embed directly i
 > **Note:** Stacks is currently a proof of concept. It is not yet production-ready. Contributions, feedback, and institutional interest are welcome.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
-[![CI](https://github.com/CSP-Library/stacks/actions/workflows/ci.yml/badge.svg)](https://github.com/CSP-Library/stacks/actions/workflows/ci.yml)
 
 ---
 
@@ -23,7 +22,7 @@ Stacks lets instructors and librarians build reading lists that embed directly i
 ## Quick Start
 
 ```bash
-git clone https://github.com/CSP-Library/stacks
+git clone https://github.com/fwdlibraries/stacks
 cd stacks
 ./scripts/setup-dev.sh
 ```
@@ -60,8 +59,6 @@ Stacks is built on:
 | Z39.50 | YAZ sidecar |
 | Object storage | S3-compatible |
 
-See [docs/architecture/design.md](docs/architecture/design.md) for the full architecture and all design decisions.
-
 ## Deployment
 
 ### Docker Compose (recommended for single institutions)
@@ -73,22 +70,13 @@ docker compose -f deploy/docker-compose.yml up -d
 docker compose -f deploy/docker-compose.yml exec app alembic upgrade head
 ```
 
-### Kubernetes (Helm)
-
-```bash
-helm install stacks deploy/helm \
-  --set image.tag=1.0.0 \
-  --set database.url=postgresql+asyncpg://... \
-  --values my-values.yaml
-```
-
-See [docs/deployment/](docs/deployment/) for detailed deployment guides.
+A Helm chart for Kubernetes deployments is planned but not yet available.
 
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
-Good first issues are tagged [`good first issue`](https://github.com/CSP-Library/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+Good first issues are tagged [`good first issue`](https://github.com/fwdlibraries/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## License
 
