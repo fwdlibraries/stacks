@@ -69,8 +69,8 @@ See [docs/architecture/design.md](docs/architecture/design.md) for the full arch
 ```bash
 cp .env.example .env
 # edit .env — set SECRET_KEY, POSTGRES_PASSWORD, S3_BUCKET, etc.
-docker compose -f deploy/docker-compose.yml up -d
-docker compose -f deploy/docker-compose.yml exec app alembic upgrade head
+docker compose --env-file .env -f deploy/docker-compose.yml up -d
+docker compose --env-file .env -f deploy/docker-compose.yml exec app alembic upgrade head
 ```
 
 ### Kubernetes (Helm)

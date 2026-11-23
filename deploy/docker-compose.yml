@@ -1,12 +1,16 @@
+# Paths below are relative to this file (deploy/). Run from the repo root with:
+#   docker compose --env-file .env -f deploy/docker-compose.yml up -d
+name: stacks
+
 services:
   app:
     image: ghcr.io/CSP-Library/stacks/backend:${STACKS_VERSION:-latest}
     build:
-      context: ./backend
+      context: ../backend
     restart: unless-stopped
-    env_file: .env
+    env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stacks}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-stacks}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
@@ -19,12 +23,12 @@ services:
   worker:
     image: ghcr.io/CSP-Library/stacks/backend:${STACKS_VERSION:-latest}
     build:
-      context: ./backend
+      context: ../backend
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     restart: unless-stopped
-    env_file: .env
+    env_file: ../.env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stacks}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-stacks}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
@@ -37,7 +41,7 @@ services:
   frontend:
     image: ghcr.io/CSP-Library/stacks/frontend:${STACKS_VERSION:-latest}
     build:
-      context: ./frontend
+      context: ../frontend
     restart: unless-stopped
     networks:
       - stacks
@@ -53,7 +57,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-stacks}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-stacks}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -85,8 +89,8 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./deploy/nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - app
       - frontend
