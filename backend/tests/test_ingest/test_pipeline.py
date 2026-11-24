@@ -1,10 +1,16 @@
 import pytest
 
 from app.ingest import pipeline
-from app.ingest.resolvers import ResolveContext
+from app.ingest.resolvers import ResolveContext, primo
 from app.ingest.sources import AlmaConfig, PrimoConfig, Source
 from tests.test_ingest.fake_http import FakeSources
-from tests.test_ingest.fixtures import CROSSREF_WORK, OPEN_LIBRARY_BOOK, alma_bib, primo_doc
+from tests.test_ingest.fixtures import (
+    CROSSREF_WORK,
+    OPEN_LIBRARY_BOOK,
+    alma_bib,
+    cdi_doc,
+    primo_doc,
+)
 
 ALMA = "https://api-na.hosted.exlibrisgroup.com/almaws/v1/bibs/"
 PRIMO = "https://api-na.hosted.exlibrisgroup.com/primo/v1/search"
@@ -111,3 +117,20 @@ async def test_fetch_rejects_malformed_identifiers_without_calling_out(fake, sys
     async with fake.client() as http:
         assert await pipeline.fetch(system, identifier, ResolveContext(http=http, sources=LIBRARY)) is None
     assert fake.requests == []
+
+
+def test_only_alma_records_have_mms_ids():
+    assert primo.mms_id(primo_doc(MMS)) == MMS
+    # CDI records have numeric source IDs too; those aren't MMS IDs
+    assert primo.mms_id(cdi_doc("38024112")) is None
+
+
+async def test_network_zone_only_records_fall_back(fake):
+    # Seen live: a consortium (Network Zone) record in Primo that the institution's
+    # Alma key can't fetch (Alma answers 400); the lookup falls back to open data
+    nz = "9911018280804266"
+    fake.add(PRIMO, {"docs": [primo_doc(nz)]})
+    fake.add(ALMA + nz, {"errorsExist": True}, status=400)
+    fake.add("https://openlibrary.org/api/books", {f"ISBN:{ISBN}": OPEN_LIBRARY_BOOK})
+    result = await run(fake, ISBN, LIBRARY)
+    assert [c.source_system for c in result.candidates] == ["openlibrary"]
