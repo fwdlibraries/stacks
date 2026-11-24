@@ -7,17 +7,16 @@ Thank you for your interest in contributing! Stacks is an open-source project an
 ### 1. Set up your development environment
 
 ```bash
-git clone https://github.com/CSP-Library/stacks
+git clone https://github.com/fwdlibraries/stacks
 cd stacks
 ./scripts/setup-dev.sh
 ```
 
-See the [development guide](docs/development/getting-started.md) for detailed setup instructions.
+See the [Development Guide](#development-guide) below for more detailed commands.
 
 ### 2. Find something to work on
 
-- Check [`good first issue`](https://github.com/CSP-Library/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for beginner-friendly tasks
-- Check the [v0.1 milestone](https://github.com/CSP-Library/stacks/milestone/1) for priority work
+- Check [`good first issue`](https://github.com/fwdlibraries/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for beginner-friendly tasks
 - Open an issue to discuss a new feature before building it
 
 ### 3. Make your changes
@@ -111,8 +110,8 @@ See `app/importers/z3950.py` for a reference implementation.
 
 ## Architecture Decisions
 
-Before making significant architectural changes, please read [docs/architecture/design.md](docs/architecture/design.md). New significant decisions should be recorded as ADRs in `docs/architecture/`.
+Before making significant architectural changes, please open an issue to discuss them. New significant decisions should be recorded as ADRs in `docs/architecture/`.
 
 ## Questions?
 
-Open a [GitHub Discussion](https://github.com/CSP-Library/stacks/discussions) or file an issue. We're happy to help.
+[File an issue](https://github.com/fwdlibraries/stacks/issues) — we're happy to help.

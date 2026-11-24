@@ -24,7 +24,7 @@ class ManualEntryHandler(ImportHandler):
 
     CROSSREF_BASE = "https://api.crossref.org/works/"
     OPEN_LIBRARY_BASE = "https://openlibrary.org/api/books"
-    USER_AGENT = "Stacks/0.1 (https://github.com/CSP-Library/stacks; mailto:admin@example.com)"
+    USER_AGENT = "Stacks/0.1 (https://github.com/fwdlibraries/stacks; mailto:admin@example.com)"
 
     async def fetch(self, payload: dict) -> AsyncIterator[RawRecord]:
         enriched = dict(payload)

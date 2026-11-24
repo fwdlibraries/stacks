@@ -95,7 +95,7 @@ export default function PublicListView() {
 
       <footer className="mt-5 pt-3 border-top text-muted small">
         Powered by{' '}
-        <a href="https://github.com/CSP-Library/stacks" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/fwdlibraries/stacks" target="_blank" rel="noopener noreferrer">
           Stacks
         </a>
       </footer>
