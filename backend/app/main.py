@@ -34,6 +34,14 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(AuditLogMiddleware)
 
+    @app.middleware("http")
+    async def frame_ancestors(request, call_next):
+        # Only the configured LMS origins may embed Stacks (replaces X-Frame-Options,
+        # which can't list several origins). Covers the /lti/* pages shown in the LMS.
+        response = await call_next(request)
+        response.headers.setdefault("Content-Security-Policy", settings.frame_ancestors_policy)
+        return response
+
     # LTI endpoints — unversioned, must remain stable for LMS registrations
     app.include_router(lti.router,       prefix="/lti",              tags=["LTI"])
 

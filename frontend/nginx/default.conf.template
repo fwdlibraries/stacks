@@ -1,5 +1,9 @@
 # Static file server for the built frontend (see Dockerfile `prod` stage).
 # /api, /lti and TLS are handled by the edge proxy in deploy/nginx/nginx.conf.
+#
+# This is a template: the nginx image fills in ${FRAME_ANCESTORS} at startup.
+# add_header is repeated in each location because nginx drops server-level
+# add_header directives in any location that sets its own.
 server {
     listen 5173;
     server_name _;
@@ -15,12 +19,16 @@ server {
     # Student list URLs load the lightweight public entry
     location /public/ {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy "frame-ancestors 'self' ${FRAME_ANCESTORS}" always;
+        add_header X-Content-Type-Options nosniff always;
         try_files $uri /public.html;
     }
 
     # Everything else is the editor SPA
     location / {
         add_header Cache-Control "no-cache";
+        add_header Content-Security-Policy "frame-ancestors 'self' ${FRAME_ANCESTORS}" always;
+        add_header X-Content-Type-Options nosniff always;
         try_files $uri /index.html;
     }
 }

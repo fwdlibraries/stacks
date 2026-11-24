@@ -1,6 +1,7 @@
+import re
 from typing import Optional
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -35,6 +36,9 @@ class Settings(BaseSettings):
     # Where browsers reach Stacks (the frontend origin). Used for the LTI redirect_uri
     # and the tool URLs printed at registration. Dev: Vite on :5173 proxies /lti.
     public_base_url: str = "http://localhost:5173"
+    # LMS origins allowed to show Stacks in an iframe (space-separated), e.g.
+    # "https://lms.example.edu https://*.instructure.com". Empty: same-origin only.
+    frame_ancestors: str = ""
 
     # Z39.50 / YAZ sidecar gateway
     yaz_gateway_url: str = "http://yaz:8080"
@@ -45,6 +49,21 @@ class Settings(BaseSettings):
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
     email_from: str = "noreply@example.com"
+
+    @field_validator("frame_ancestors")
+    @classmethod
+    def _valid_frame_ancestors(cls, value: str) -> str:
+        # Each entry ends up in a response header: allow only plain origins
+        origin = re.compile(r"^https?://(\*\.)?[A-Za-z0-9.-]+(:\d{1,5})?$")
+        sources = value.split()
+        bad = [s for s in sources if not origin.match(s)]
+        if bad:
+            raise ValueError(f"FRAME_ANCESTORS entries must be origins like https://lms.example.edu: {bad}")
+        return " ".join(sources)
+
+    @property
+    def frame_ancestors_policy(self) -> str:
+        return " ".join(["frame-ancestors", "'self'", *self.frame_ancestors.split()])
 
     @model_validator(mode="after")
     def _require_secret_key(self) -> "Settings":
