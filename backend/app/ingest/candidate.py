@@ -16,6 +16,8 @@ class Candidate:
     match_method: str             # 'identifier' (exact) | 'search' | later 'ai'
     confidence: float             # 0.0–1.0
     raw: dict = field(default_factory=dict)  # kept as raw_import_data
+    # Search results only: 'online' | 'in_library' | 'check_holdings' | 'citation_only'
+    availability: str | None = None
 
     @property
     def authoritative(self) -> bool:

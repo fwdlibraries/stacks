@@ -66,3 +66,25 @@ class AlmaResolver(Resolver):
             confidence=1.0,
             raw={k: bib.get(k) for k in ("mms_id", "suppress_from_publishing", "record_format", "anies")},
         )
+
+
+async def held(mms_ids: list[str], ctx: ResolveContext) -> set[str]:
+    """Which of these MMS IDs the institution's Alma holds (one call per 100 IDs).
+
+    Primo also shows consortium (Network Zone) records, which the institution's
+    key can't read; those come back missing here.
+    """
+    source = ctx.sources["alma"]
+    found: set[str] = set()
+    ids = [m for m in dict.fromkeys(mms_ids) if m.isdigit()]
+    for start in range(0, len(ids), 100):
+        data = await get_json(
+            ctx,
+            "Alma",
+            f"{source.config.api_base}/almaws/v1/bibs",
+            params={"mms_id": ",".join(ids[start : start + 100]), "view": "brief"},
+            headers={"Authorization": f"apikey {source.api_key}", "Accept": "application/json"},
+            not_found=(400, 404),
+        )
+        found.update(b["mms_id"] for b in (data or {}).get("bib") or [] if b.get("mms_id"))
+    return found

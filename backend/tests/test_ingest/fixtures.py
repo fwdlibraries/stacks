@@ -68,3 +68,38 @@ OPEN_LIBRARY_BOOK = {
     "publish_date": "1953",
     "publishers": [{"name": "Knopf"}],
 }
+
+
+def primo_search_doc(record_id: str, *, context: str, title: str, type_: str = "book", availability: str = "not_restricted",
+                     addata: dict | None = None, creator: list[str] | None = None) -> dict:
+    """A Primo search result with display/addata/delivery, as the live API returns them."""
+    return {
+        "context": context,
+        "pnx": {
+            "control": {"recordid": [record_id], "sourcerecordid": [record_id.removeprefix("alma")]},
+            "display": {"title": [title], "type": [type_], "creator": creator or []},
+            "addata": addata or {},
+        },
+        "delivery": {"availability": [availability]},
+    }
+
+
+CDI_ARTICLE = primo_search_doc(
+    "cdi_crossref_primary_10_1016_j_enpol_2007_02_016",
+    context="PC",
+    title="Electricity pricing under “carbon emissions trading”",
+    type_="article",
+    availability="fulltext",
+    creator=["Bonacina, Monica ; Gulli, Francesco"],
+    addata={
+        "jtitle": ["Energy policy"],
+        "volume": ["35"],
+        "issue": ["8"],
+        "spage": ["4200"],
+        "epage": ["4220"],
+        "date": ["2007"],
+        "doi": ["10.1016/j.enpol.2007.02.016"],
+        "issn": ["0301-4215"],
+        "pub": ["Elsevier Ltd"],
+    },
+)

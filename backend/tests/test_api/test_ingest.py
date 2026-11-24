@@ -188,3 +188,44 @@ def test_credentials_round_trip():
     token = credentials.encrypt("secret-key")
     assert "secret-key" not in token
     assert credentials.decrypt(token) == "secret-key"
+
+
+async def test_capabilities(client, setup):
+    resp = await client.get("/api/v1/ingest/capabilities")
+    # "mine" has Alma but no Primo, so no library search
+    assert resp.json() == {"library_search": False}
+
+
+async def test_search_needs_primo(client, setup):
+    resp = await client.post("/api/v1/ingest/search", json={"query": "carbon"})
+    assert resp.status_code == 409
+
+
+async def test_search(client, setup, db_session):
+    from tests.test_ingest.fixtures import CDI_ARTICLE
+    mine, _, fake = setup
+    db_session.add(
+        LibrarySource(
+            organization_id=mine.org.id,
+            kind="primo",
+            config={"region": "na", "vid": "01ABC_INST:MAIN", "discovery_url": "https://abc.primo.exlibrisgroup.com"},
+            api_key_encrypted=credentials.encrypt("primo-key"),
+        )
+    )
+    await db_session.commit()
+    fake.add("https://api-na.hosted.exlibrisgroup.com/primo/v1/search", {"info": {"total": 1}, "docs": [CDI_ARTICLE]})
+
+    assert (await client.get("/api/v1/ingest/capabilities")).json() == {"library_search": True}
+    resp = await client.post("/api/v1/ingest/search", json={"query": "carbon", "limit": 5})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    [candidate] = body["candidates"]
+    assert (candidate["source_system"], candidate["availability"]) == ("primo", "online")
+
+    resp = await client.post(
+        f"/api/v1/sections/{mine.section_b.id}/citations/from-source",
+        json={"source_system": "primo", "source_identifier": candidate["source_identifier"]},
+    )
+    assert resp.status_code == 201
+    assert (resp.json()["is_bound"], resp.json()["doi"]) == (False, "10.1016/j.enpol.2007.02.016")
