@@ -1,16 +1,13 @@
+import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import (
-    String, Boolean, Integer, Text, DateTime, ForeignKey,
-    Enum as SAEnum, ARRAY, func
-)
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+
+from sqlalchemy import ARRAY, Boolean, DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import text
-import enum
 
 from app.database import Base
-
 
 # ─── Enums ────────────────────────────────────────────────────────────────────
 

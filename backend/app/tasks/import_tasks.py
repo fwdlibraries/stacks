@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from app.tasks.celery_app import celery_app
 from app.importers import get_handler
 from app.importers.base import NormalizationError
+from app.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def process_import_job(self, job_id: str):
         asyncio.run(_process_import_job(job_id))
     except Exception as exc:
         logger.exception("Import job %s failed: %s", job_id, exc)
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc
 
 
 async def _process_import_job(job_id: str):
@@ -45,7 +45,7 @@ async def _process_import_job(job_id: str):
             return
 
         job.status = "processing"
-        job.started_at = datetime.now(timezone.utc)
+        job.started_at = datetime.now(UTC)
         await db.commit()
 
         _broadcast(job.payload.get("list_id"), {
@@ -100,7 +100,7 @@ async def _process_import_job(job_id: str):
                 })
 
         job.status = "awaiting_review"
-        job.completed_at = datetime.now(timezone.utc)
+        job.completed_at = datetime.now(UTC)
         job.result = {"processed": processed, "failed": failed}
         await db.commit()
 

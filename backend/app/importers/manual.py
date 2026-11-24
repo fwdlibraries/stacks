@@ -1,7 +1,8 @@
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+
 import httpx
 
-from app.importers.base import ImportHandler, RawRecord, CitationDraft
+from app.importers.base import CitationDraft, ImportHandler, RawRecord
 
 
 class ManualEntryHandler(ImportHandler):

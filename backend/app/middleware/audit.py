@@ -1,6 +1,7 @@
+import logging
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-import logging
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,23 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import auth, lti, orgs, lists, citations, imports, files, users, admin, health, public
 from app.middleware.audit import AuditLogMiddleware
+from app.routers import (
+    admin,
+    auth,
+    citations,
+    files,
+    health,
+    imports,
+    lists,
+    lti,
+    orgs,
+    public,
+    users,
+)
 
 
 @asynccontextmanager
