@@ -26,3 +26,7 @@ deploy/nginx/certs/
 .vscode/
 .idea/
 .DS_Store
+*.swp
+
+# Claude Code local settings
+.claude/settings.local.json
