@@ -69,6 +69,10 @@ done
 info "Running database migrations..."
 "${COMPOSE[@]}" run --rm app alembic upgrade head
 
+# Seed demo data (idempotent; skipped if it already exists)
+info "Seeding demo reading list..."
+"${COMPOSE[@]}" run --rm app python -m app.seed
+
 # Start all services
 info "Starting all services..."
 "${COMPOSE[@]}" up -d
@@ -79,6 +83,7 @@ echo ""
 echo "  Backend API:  http://localhost:8000"
 echo "  API docs:     http://localhost:8000/api/docs"
 echo "  Frontend:     http://localhost:5173"
+echo "  Demo list:    http://localhost:5173/public/demo/HIST101/fall-2026"
 echo "  Database:     localhost:5432 (user: stacks)"
 echo ""
 echo "  Logs: ${COMPOSE[*]} logs -f"

@@ -262,7 +262,10 @@ class User(Base):
 
     organization: Mapped[Organization] = relationship(back_populates="users")
     identities: Mapped[list["UserIdentity"]] = relationship(back_populates="user")
-    role_assignments: Mapped[list["UserRoleAssignment"]] = relationship(back_populates="user")
+    # user_role_assignments has two FKs to users (user_id, granted_by); name the one this follows
+    role_assignments: Mapped[list["UserRoleAssignment"]] = relationship(
+        back_populates="user", foreign_keys="UserRoleAssignment.user_id"
+    )
 
 
 class UserIdentity(Base):
