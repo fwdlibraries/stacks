@@ -36,3 +36,11 @@ class CurrentUser(BaseModel):
     is_system_admin: bool
     must_change_password: bool
     organization: OrganizationSummary
+
+
+class LtiCodeExchange(BaseModel):
+    code: str
+
+
+class LtiExchangeResponse(TokenResponse):
+    next: str  # editor path to open, e.g. /lists/{id}

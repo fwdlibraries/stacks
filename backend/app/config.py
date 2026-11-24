@@ -32,6 +32,9 @@ class Settings(BaseSettings):
 
     # LTI
     lti_private_key_storage: str = "database"  # 'database' | 'aws_secrets'
+    # Where browsers reach Stacks (the frontend origin). Used for the LTI redirect_uri
+    # and the tool URLs printed at registration. Dev: Vite on :5173 proxies /lti.
+    public_base_url: str = "http://localhost:5173"
 
     # Z39.50 / YAZ sidecar gateway
     yaz_gateway_url: str = "http://yaz:8080"

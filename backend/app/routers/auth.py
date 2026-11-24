@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -9,8 +10,16 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.models import User
-from app.schemas.auth import CurrentUser, LoginRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import (
+    CurrentUser,
+    LoginRequest,
+    LtiCodeExchange,
+    LtiExchangeResponse,
+    RefreshRequest,
+    TokenResponse,
+)
 from app.services.auth_service import AuthService
+from app.services.ephemeral import EphemeralStore, get_ephemeral_store
 
 router = APIRouter()
 
@@ -64,3 +73,24 @@ async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)
             detail="Invalid or expired refresh token",
         )
     return _issue_tokens(user)
+
+
+@router.post("/lti/exchange", response_model=LtiExchangeResponse, summary="Exchange an LTI login code")
+async def exchange_lti_code(
+    body: LtiCodeExchange,
+    db: AsyncSession = Depends(get_db),
+    store: EphemeralStore = Depends(get_ephemeral_store),
+):
+    """
+    Swap the one-time code from an LTI launch redirect for tokens. Codes live for
+    60 seconds and work once, so tokens never appear in URLs or browser history.
+    """
+    record = await store.pop(f"lti:code:{body.code}")
+    user = await db.get(User, uuid.UUID(record["user_id"])) if record else None
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This sign-in link has expired. Open Stacks again from your course.",
+        )
+    user.last_login_at = datetime.now(UTC)
+    return LtiExchangeResponse(**_issue_tokens(user).model_dump(), next=record["next"])
