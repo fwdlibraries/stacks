@@ -66,7 +66,7 @@ async def load_link_settings(db: AsyncSession, organization_id: uuid.UUID) -> Li
         return None
 
 
-def _library_record_id(citation: Citation) -> str | None:
+def library_record_id(citation: Citation) -> str | None:
     """The Primo record ID for a citation that is a local library record."""
     if citation.source_status == "unlinked" or not citation.source_identifier:
         return None
@@ -149,7 +149,7 @@ def _resolvable(citation: Citation) -> bool:
 def citation_link(citation: Citation, settings: LinkSettings | None) -> Link | None:
     rtype = citation.resource_type.value if citation.resource_type else "other"
     if settings is not None:
-        if record_id := _library_record_id(citation):
+        if record_id := library_record_id(citation):
             return Link(full_record_url(settings, record_id), "library_record")
         if rtype != "website" and _resolvable(citation):
             return Link(openurl(settings, citation), "full_text")
@@ -169,8 +169,30 @@ def annotate(reading_list: ReadingList, settings: LinkSettings | None) -> Readin
     return reading_list
 
 
+def go_url(citation: Citation) -> str:
+    """Stacks' click-through address; resolves at click time (app/routers/go.py)."""
+    return f"/api/v1/go/{citation.id}"
+
+
+def may_resolve(citation: Citation, settings: LinkSettings | None) -> bool:
+    """Whether a resolver could find something even without a render-time link.
+
+    A DOI is worth trying anywhere (LibKey, open access); the library's resolver
+    needs a discovery system configured.
+    """
+    if citation.doi:
+        return True
+    return settings is not None and bool(citation.isbn or citation.issn or library_record_id(citation))
+
+
 def annotate_citations(citations: Iterable[Citation], settings: LinkSettings | None) -> None:
+    """Point each citation at /go when it has (or may resolve to) a link.
+
+    `link_kind` is the render-time link's kind: a hint for the label. The click
+    itself may go somewhere more direct (LibKey, a full-text platform).
+    """
     for citation in citations:
         link = citation_link(citation, settings)
-        citation.link_url = link.url if link else None  # type: ignore[attr-defined]
-        citation.link_kind = link.kind if link else None  # type: ignore[attr-defined]
+        has_link = link is not None or may_resolve(citation, settings)
+        citation.link_url = go_url(citation) if has_link else None  # type: ignore[attr-defined]
+        citation.link_kind = (link.kind if link else "full_text") if has_link else None  # type: ignore[attr-defined]

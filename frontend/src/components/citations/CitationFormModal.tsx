@@ -4,6 +4,7 @@ import { Books } from '@phosphor-icons/react'
 import { FieldLabel, FormModal } from '@/components/common/FormModal'
 import { CitationLookup } from '@/components/citations/CitationLookup'
 import { LibrarySearch } from '@/components/citations/LibrarySearch'
+import { LinkCheck } from '@/components/citations/LinkCheck'
 import type { Citation, CitationInput, ResourceType } from '@/api/hooks/useLists'
 import { useIngestCapabilities, type LookupCandidate } from '@/api/hooks/useIngest'
 import {
@@ -252,6 +253,7 @@ export function CitationFormModal({
               </div>
             </Alert>
           )}
+          {citation && <LinkCheck citationId={citation.id} />}
           {bibliographicFields}
         </>
       )}

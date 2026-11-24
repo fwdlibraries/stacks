@@ -21,6 +21,10 @@ interface CitationCardProps {
   isDragging?: boolean
   /** Editor view only: drag handle rendered at the card's left edge */
   dragHandle?: ReactNode
+  /** Editor view: clicks are previews (not counted in click stats) */
+  linkPreview?: boolean
+  /** Editor view: anonymous click-through counts */
+  clicks?: { total: number; last_30_days: number }
 }
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
@@ -54,9 +58,14 @@ export function CitationCard({
   onDelete,
   isDragging = false,
   dragHandle,
+  linkPreview = false,
+  clicks,
 }: CitationCardProps) {
   const resolver = linkResolverBaseUrl ? { base_url: linkResolverBaseUrl } : null
-  const link = resolveCitationLink(citation, resolver)
+  const resolved = resolveCitationLink(citation, resolver)
+  // Stacks' own click-through links: mark staff clicks so they aren't counted
+  const link =
+    resolved && linkPreview && resolved.startsWith('/api/v1/go/') ? `${resolved}?preview=true` : resolved
   const linkLabel = getLinkLabel(citation)
 
   return (
@@ -116,6 +125,14 @@ export function CitationCard({
             {citation.student_note && (
               <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.875rem' }}>
                 <em>{citation.student_note}</em>
+              </p>
+            )}
+
+            {clicks !== undefined && (
+              <p className="text-body-secondary mt-1 mb-0" style={{ fontSize: '0.8rem' }}>
+                {clicks.total === 0
+                  ? 'No student clicks yet'
+                  : `${clicks.total} student ${clicks.total === 1 ? 'click' : 'clicks'} · ${clicks.last_30_days} in the last 30 days`}
               </p>
             )}
 

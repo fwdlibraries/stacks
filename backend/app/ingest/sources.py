@@ -34,7 +34,27 @@ class _Config(BaseModel):
 
 
 class AlmaConfig(_Config):
-    """Alma: authoritative record fetches and sync (Bibs API)."""
+    """Alma: authoritative record fetches and sync (Bibs API), and the link resolver."""
+
+    # Origin of the institution's Alma, for its link resolver, e.g.
+    # https://abc.alma.exlibrisgroup.com. Empty: derived from the Primo discovery URL.
+    resolver_url: str | None = None
+
+    @field_validator("resolver_url")
+    @classmethod
+    def _resolver_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"https://[A-Za-z0-9.-]+", value.rstrip("/")):
+            raise ValueError("resolver_url should be an https origin, e.g. https://abc.alma.exlibrisgroup.com")
+        return value.rstrip("/")
+
+
+class LibKeyConfig(BaseModel):
+    """Third Iron LibKey: direct article links. The API key is the access token."""
+
+    model_config = ConfigDict(extra="forbid")
+    library_id: int = Field(gt=0)
 
 
 class PrimoConfig(_Config):
@@ -65,7 +85,7 @@ class PrimoConfig(_Config):
         return self.vid.split(":", 1)[0]
 
 
-SOURCE_CONFIGS: dict[str, type[_Config]] = {"alma": AlmaConfig, "primo": PrimoConfig}
+SOURCE_CONFIGS: dict[str, type[BaseModel]] = {"alma": AlmaConfig, "primo": PrimoConfig, "libkey": LibKeyConfig}
 
 
 @dataclass(frozen=True)
@@ -73,7 +93,7 @@ class Source:
     """A configured, active source with its decrypted key, ready for API calls."""
 
     kind: str
-    config: _Config
+    config: BaseModel
     api_key: str
 
 
