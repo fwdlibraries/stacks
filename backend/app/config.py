@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # "https://lms.example.edu https://*.instructure.com". Empty: same-origin only.
     frame_ancestors: str = ""
 
+    # Encrypts stored credentials such as library API keys (Fernet key, see
+    # `python -m app.cli generate-credentials-key`). Empty: derived from SECRET_KEY,
+    # which then can't be rotated without re-entering those credentials.
+    credentials_key: str = ""
+
+    # Contact address sent to open metadata APIs (Crossref "polite pool"). Optional.
+    metadata_contact_email: str = ""
+
     # Z39.50 / YAZ sidecar gateway
     yaz_gateway_url: str = "http://yaz:8080"
 

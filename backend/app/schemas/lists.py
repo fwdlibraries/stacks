@@ -14,6 +14,12 @@ class StaffCitation(PublicCitation):
     staff_note: str | None = None
     source_system: str | None = None
     source_identifier: str | None = None
+    # Bound: bibliographic fields come from the library's system and are read-only
+    is_bound: bool = False
+    match_method: str | None = None
+    match_confidence: float | None = None
+    source_status: str | None = None
+    source_synced_at: datetime | None = None
 
 
 class StaffSection(BaseModel):
@@ -175,3 +181,10 @@ class CitationCreate(_CitationFields):
 class CitationUpdate(_CitationFields):
     # Move to another section of the same reading list (appended at the end)
     list_section_id: uuid.UUID | None = None
+
+
+# Fields staff may change on a citation bound to the library's system; everything
+# else comes from the source record.
+BOUND_EDITABLE_FIELDS = frozenset(
+    {"is_required", "student_note", "staff_note", "use_doi_for_linking", "list_section_id"}
+)

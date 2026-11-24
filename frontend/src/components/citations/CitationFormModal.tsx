@@ -1,7 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { Col, Form, Row } from 'react-bootstrap'
+import { Alert, Button, Col, Form, Row } from 'react-bootstrap'
+import { Books } from '@phosphor-icons/react'
 import { FieldLabel, FormModal } from '@/components/common/FormModal'
+import { CitationLookup } from '@/components/citations/CitationLookup'
 import type { Citation, CitationInput, ResourceType } from '@/api/hooks/useLists'
+import type { LookupCandidate } from '@/api/hooks/useIngest'
 import {
   RESOURCE_TYPE_OPTIONS,
   citationToForm,
@@ -21,7 +24,19 @@ interface CitationFormModalProps {
   error?: string | null
   onSubmit: (input: CitationInput) => void
   onCancel: () => void
+  /** Adding: add a looked-up record, with the instructor fields filled in here */
+  onAddFromSource?: (candidate: LookupCandidate, input: InstructorFields) => void
+  isAddingFromSource?: boolean
+  addFromSourceError?: string | null
+  /** Editing a bound citation: detach it from the library record */
+  onUnlink?: () => Promise<unknown>
+  unlinkError?: string | null
 }
+
+/** What staff control on any citation, including one bound to a library record */
+export type InstructorFields = Pick<CitationInput, 'is_required' | 'student_note' | 'staff_note'>
+
+const INSTRUCTOR_KEYS = new Set<keyof CitationFormValues>(['is_required', 'student_note', 'staff_note'])
 
 /** Mount with a `key` per citation so the fields reset when it changes. */
 export function CitationFormModal({
@@ -31,7 +46,15 @@ export function CitationFormModal({
   error,
   onSubmit,
   onCancel,
+  onAddFromSource,
+  isAddingFromSource = false,
+  addFromSourceError,
+  onUnlink,
+  unlinkError,
 }: CitationFormModalProps) {
+  // Bound citations follow the library's record: only the instructor's fields are editable
+  const [bound, setBound] = useState(Boolean(citation?.is_bound))
+  const [unlinking, setUnlinking] = useState(false)
   const [values, setValues] = useState<CitationFormValues>(() =>
     citation ? citationToForm(citation) : emptyCitationForm()
   )
@@ -46,7 +69,30 @@ export function CitationFormModal({
   const set = <K extends keyof CitationFormValues>(key: K, value: CitationFormValues[K]) =>
     setValues((v) => ({ ...v, [key]: value }))
 
+  const instructorFields = (): InstructorFields => ({
+    is_required: values.is_required,
+    student_note: values.student_note,
+    staff_note: values.staff_note,
+  })
+
+  const unlink = async () => {
+    if (!onUnlink) return
+    setUnlinking(true)
+    try {
+      await onUnlink()
+      setBound(false)
+    } catch {
+      // unlinkError shows the reason
+    } finally {
+      setUnlinking(false)
+    }
+  }
+
   const submit = () => {
+    if (bound) {
+      onSubmit(instructorFields())
+      return
+    }
     const found = validateCitationForm(values)
     setErrors(found)
     if (Object.keys(found).length === 0) onSubmit(formToCitationInput(values))
@@ -61,6 +107,7 @@ export function CitationFormModal({
     <Form.Group className="mb-3" controlId={`citation-${key}`}>
       <FieldLabel required={options.required}>{label}</FieldLabel>
       <Form.Control
+        disabled={bound && !INSTRUCTOR_KEYS.has(key)}
         type={options.type ?? 'text'}
         as={options.as}
         rows={options.rows}
@@ -84,11 +131,44 @@ export function CitationFormModal({
       onSubmit={submit}
       onCancel={onCancel}
     >
+      {!citation && onAddFromSource && (
+        <>
+          <CitationLookup
+            onAdd={(candidate) => onAddFromSource(candidate, instructorFields())}
+            isAdding={isAddingFromSource}
+            addError={addFromSourceError}
+          />
+          <h3 className="h6">Or enter the details</h3>
+        </>
+      )}
+
+      {bound && (
+        <Alert variant="info" className="small d-flex align-items-start gap-2">
+          <Books aria-hidden="true" size={20} className="flex-shrink-0" />
+          <div>
+            These details come from your library's catalogue and update automatically. You can still change
+            whether it's required and the notes.
+            {onUnlink && (
+              <>
+                {' '}
+                To edit the details yourself,{' '}
+                <Button variant="link" size="sm" className="p-0 align-baseline" onClick={unlink} disabled={unlinking}>
+                  {unlinking ? 'unlinking…' : 'unlink it from the catalogue'}
+                </Button>{' '}
+                (it will then stop updating).
+              </>
+            )}
+            {unlinkError && <div className="text-danger mt-1">{unlinkError}</div>}
+          </div>
+        </Alert>
+      )}
+
       <Row>
         <Col md={5}>
           <Form.Group className="mb-3" controlId="citation-resource_type">
             <FieldLabel required>Resource type</FieldLabel>
             <Form.Select
+              disabled={bound}
               value={values.resource_type}
               onChange={(e) => set('resource_type', e.target.value as ResourceType)}
             >

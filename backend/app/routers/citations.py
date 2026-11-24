@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.models import Citation, ImportItem, User
-from app.schemas.lists import CitationCreate, CitationReorder, CitationUpdate, StaffCitation
+from app.schemas.lists import (
+    BOUND_EDITABLE_FIELDS,
+    CitationCreate,
+    CitationReorder,
+    CitationUpdate,
+    StaffCitation,
+)
 from app.services import lists_service as svc
 
 router = APIRouter()
@@ -54,6 +60,21 @@ async def update_citation(
     citation = await svc.get_citation(db, current_user, citation_id)
     source = await svc.get_section(db, current_user, citation.list_section_id)
     fields = body.to_model_fields()
+
+    if citation.is_bound:
+        # Bibliographic fields follow the library's record. Unchanged values are fine
+        # (forms send everything); changing one needs an unlink first.
+        changed = [
+            name
+            for name, value in fields.items()
+            if name not in BOUND_EDITABLE_FIELDS and getattr(citation, name) != value
+        ]
+        if changed:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "This citation comes from your library's catalogue and updates automatically. "
+                "Unlink it from the catalogue record to edit these fields.",
+            )
 
     target_id = fields.pop("list_section_id", None)
     if target_id is not None and target_id != citation.list_section_id:
@@ -116,3 +137,25 @@ async def reorder_citations(
     svc.apply_order(citations, body.citation_ids, "citation_ids")
     await svc.touch_list(db, section.reading_list_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/citations/{citation_id}/unlink", response_model=StaffCitation, summary="Unlink from the source record")
+async def unlink_citation(
+    citation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Detach a citation from its library record so its fields can be edited.
+
+    It keeps its current metadata and provenance but no longer syncs. This can't
+    be undone; to rebind, add the record again.
+    """
+    citation = await svc.get_citation(db, current_user, citation_id)
+    if not citation.is_bound:
+        raise HTTPException(status.HTTP_409_CONFLICT, "This citation isn't linked to a library record")
+    section = await svc.get_section(db, current_user, citation.list_section_id)
+    citation.source_status = "unlinked"
+    await svc.touch_list(db, section.reading_list_id)
+    await db.flush()
+    await db.refresh(citation)
+    return citation

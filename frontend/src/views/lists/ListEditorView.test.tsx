@@ -107,4 +107,80 @@ describe('ListEditorView', () => {
     await waitFor(() => expect(del).toHaveBeenCalledWith('/citations/c1'))
     expect(await within(dialog).findByText('Citation not found')).toBeInTheDocument()
   })
+
+  it('looks up an identifier and adds the library record with the instructor fields', async () => {
+    const post = vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
+      if (url === '/ingest/lookup') {
+        return {
+          data: {
+            identifiers: [{ kind: 'isbn', value: '9780140449136' }],
+            warnings: [],
+            candidates: [
+              {
+                source_system: 'alma',
+                source_identifier: '991234567890123',
+                match_method: 'isbn',
+                confidence: 0.95,
+                authoritative: true,
+                citation: { title: 'What is history?', author: ['Carr, E. H.'], editor: [], year: 1961, metadata: {} },
+              },
+            ],
+          },
+        }
+      }
+      return { data: {} }
+    })
+    renderRoutes(routes, '/lists/l1')
+
+    const week1 = (await screen.findByRole('heading', { name: 'Week 1' })).closest('section')!
+    fireEvent.click(within(week1).getByRole('button', { name: /Add citation/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/^Student note/), { target: { value: 'Chapter 1' } })
+    const lookup = within(dialog).getByLabelText('DOI, ISBN or MMS ID')
+    fireEvent.change(lookup, { target: { value: '978-0-14-044913-6' } })
+    // Enter looks up rather than submitting the form
+    fireEvent.keyDown(lookup, { key: 'Enter' })
+
+    expect(await within(dialog).findByText('Your library')).toBeInTheDocument()
+    expect(post).toHaveBeenCalledWith('/ingest/lookup', { query: '978-0-14-044913-6' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add What is history?' }))
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/sections/s2/citations/from-source', {
+        source_system: 'alma',
+        source_identifier: '991234567890123',
+        is_required: true,
+        student_note: 'Chapter 1',
+        staff_note: '',
+      })
+    )
+    expect(post).not.toHaveBeenCalledWith('/sections/s2/citations', expect.anything())
+  })
+
+  it('keeps a bound citation read-only until it is unlinked', async () => {
+    const bound = { ...LIST.sections[0].citations[0], is_bound: true, source_system: 'alma' }
+    vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: { ...LIST, sections: [{ ...LIST.sections[0], citations: [bound] }, LIST.sections[1]] },
+    })
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({ data: {} })
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { ...bound, is_bound: false } })
+    renderRoutes(routes, '/lists/l1')
+
+    expect(await screen.findByText('Library record')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit What Is History?' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText(/^Title/)).toBeDisabled()
+    fireEvent.change(within(dialog).getByLabelText(/^Student note/), { target: { value: 'Skim' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save citation' }))
+
+    await waitFor(() =>
+      expect(patch).toHaveBeenCalledWith('/citations/c1', { is_required: true, student_note: 'Skim', staff_note: '' })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit What Is History?' }))
+    const again = await screen.findByRole('dialog')
+    fireEvent.click(within(again).getByRole('button', { name: /unlink it from the catalogue/ }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/citations/c1/unlink'))
+    await waitFor(() => expect(within(again).getByLabelText(/^Title/)).toBeEnabled())
+  })
 })
