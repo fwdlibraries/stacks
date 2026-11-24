@@ -1,0 +1,110 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import ListEditorView from './ListEditorView'
+import { renderRoutes } from '@/test/renderWithProviders'
+import apiClient from '@/api/client'
+import type { ReadingList } from '@/api/hooks/useLists'
+
+const LIST: ReadingList = {
+  id: 'l1',
+  title: 'HIST 101 Reading List',
+  visibility: 'public',
+  is_published: false,
+  sections: [
+    {
+      id: 's1',
+      title: 'Required',
+      sort_order: 0,
+      citations: [
+        {
+          id: 'c1',
+          title: 'What Is History?',
+          resource_type: 'book',
+          author: ['Carr, Edward Hallett'],
+          use_doi_for_linking: true,
+          is_required: true,
+          sort_order: 0,
+          metadata: {},
+        },
+      ],
+    },
+    { id: 's2', title: 'Week 1', sort_order: 1, citations: [] },
+  ],
+}
+
+const routes = [{ path: '/lists/:listId', element: <ListEditorView /> }]
+
+beforeEach(() => {
+  vi.spyOn(apiClient, 'get').mockResolvedValue({ data: LIST })
+})
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('ListEditorView', () => {
+  it('publishes the list', async () => {
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { ...LIST, is_published: true } })
+    renderRoutes(routes, '/lists/l1')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/lists/l1/publish'))
+  })
+
+  it('only offers to delete empty sections', async () => {
+    renderRoutes(routes, '/lists/l1')
+
+    expect(await screen.findByRole('button', { name: 'Delete section Week 1' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete section Required' })).not.toBeInTheDocument()
+  })
+
+  it('adds a citation to a section', async () => {
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: {} })
+    renderRoutes(routes, '/lists/l1')
+
+    const week1 = (await screen.findByRole('heading', { name: 'Week 1' })).closest('section')!
+    fireEvent.click(within(week1).getByRole('button', { name: /Add citation/ }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/^Title/), { target: { value: 'The Historian’s Craft' } })
+    fireEvent.change(within(dialog).getByLabelText(/^Authors/), { target: { value: 'Bloch, Marc' } })
+    fireEvent.change(within(dialog).getByLabelText(/^Year/), { target: { value: '1953' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add citation' }))
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        '/sections/s2/citations',
+        expect.objectContaining({ title: 'The Historian’s Craft', author: ['Bloch, Marc'], year: 1953 })
+      )
+    )
+  })
+
+  it('shows field errors instead of saving an invalid citation', async () => {
+    const post = vi.spyOn(apiClient, 'post')
+    renderRoutes(routes, '/lists/l1')
+
+    const week1 = (await screen.findByRole('heading', { name: 'Week 1' })).closest('section')!
+    fireEvent.click(within(week1).getByRole('button', { name: /Add citation/ }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/^URL/), { target: { value: 'javascript:alert(1)' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add citation' }))
+
+    expect(await within(dialog).findByText('Enter a title.')).toBeInTheDocument()
+    expect(within(dialog).getByText(/must start with http/)).toBeInTheDocument()
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it('confirms before deleting a citation and shows server errors', async () => {
+    const del = vi.spyOn(apiClient, 'delete').mockRejectedValue(
+      Object.assign(new Error('fail'), { isAxiosError: true, response: { status: 404, data: { detail: 'Citation not found' } } })
+    )
+    renderRoutes(routes, '/lists/l1')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete What Is History?' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/Delete “What Is History\?”/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete citation' }))
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/citations/c1'))
+    expect(await within(dialog).findByText('Citation not found')).toBeInTheDocument()
+  })
+})
