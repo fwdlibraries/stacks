@@ -23,7 +23,10 @@ services:
   frontend:
     build:
       context: ../frontend
+      target: dev
     command: npm run dev -- --host
+    environment:
+      VITE_API_PROXY_TARGET: http://app:8000
     volumes:
       - ../frontend:/app
       - /app/node_modules

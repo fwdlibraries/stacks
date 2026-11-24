@@ -16,6 +16,8 @@ export interface Citation {
   link_resolver_url?: string
   use_doi_for_linking: boolean
   student_note?: string
+  /** Only returned to staff; never present on public list responses */
+  staff_note?: string
   is_required: boolean
   sort_order: number
   metadata: Record<string, unknown>
@@ -39,6 +41,17 @@ export interface ReadingList {
 }
 
 // ── Queries ────────────────────────────────────────────────────────────────────
+
+/** Reading lists visible to the current user */
+export function useReadingLists() {
+  return useQuery({
+    queryKey: ['lists'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<ReadingList[]>('/lists')
+      return data
+    },
+  })
+}
 
 export function useReadingList(listId: string) {
   return useQuery({
