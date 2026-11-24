@@ -21,6 +21,10 @@ RUN npm run build
 # Listens on 5173 so deploy/nginx/nginx.conf's `frontend:5173` upstream works
 # in both dev and production.
 FROM nginx:1.27-alpine AS prod
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Rendered to /etc/nginx/conf.d/default.conf at startup (envsubst)
+COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
+# LMS origins allowed to frame Stacks; empty = same-origin only. Must be defined
+# (even empty) for the template to render.
+ENV FRAME_ANCESTORS=""
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 5173

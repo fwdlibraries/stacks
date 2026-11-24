@@ -49,6 +49,9 @@ services:
     build:
       context: ../frontend
     restart: unless-stopped
+    environment:
+      # LMS origins allowed to embed Stacks (the app reads the same value from .env)
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
     networks:
       - stacks
 
