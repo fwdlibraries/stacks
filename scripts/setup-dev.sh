@@ -57,7 +57,7 @@ cd frontend && npm install && cd "${REPO_ROOT}"
 
 # Start services
 info "Starting Docker services..."
-"${COMPOSE[@]}" up -d db redis yaz
+"${COMPOSE[@]}" up -d db redis
 
 # Wait for database
 info "Waiting for database to be ready..."
