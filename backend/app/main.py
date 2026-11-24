@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import auth, lti, orgs, lists, citations, imports, files, users, admin, health
+from app.routers import auth, lti, orgs, lists, citations, imports, files, users, admin, health, public
 from app.middleware.audit import AuditLogMiddleware
 
 
@@ -47,6 +47,9 @@ def create_app() -> FastAPI:
     app.include_router(users.router,     prefix="/api/v1",           tags=["Users"])
     app.include_router(admin.router,     prefix="/api/v1/admin",     tags=["Admin"])
     app.include_router(health.router,    prefix="/api/v1/health",    tags=["Health"])
+
+    # Unauthenticated student list view
+    app.include_router(public.router,    prefix="/api/v1/public",    tags=["Public"])
 
     return app
 
