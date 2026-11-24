@@ -4,7 +4,6 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,9 +13,10 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.ingest import pipeline
 from app.ingest.candidate import Candidate, SourceError
+from app.ingest.fields import UnusableRecord, citation_fields
 from app.ingest.resolvers import BY_SYSTEM, ResolveContext, primo
 from app.ingest.sources import load_sources
-from app.models.models import Citation, ResourceType, User
+from app.models.models import Citation, User
 from app.schemas.ingest import (
     CandidateCitation,
     CandidateOut,
@@ -69,32 +69,11 @@ def _candidate_out(candidate: Candidate) -> CandidateOut:
     )
 
 
-def citation_fields(candidate: Candidate) -> dict:
-    """Bibliographic Citation columns from a candidate, made safe to store and show."""
-    draft = candidate.draft
-    if not draft.title:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "That record has no title, so it can't be added")
-    url = draft.url if draft.url and urlsplit(draft.url).scheme.lower() in ("http", "https") else None
-    rtype = draft.resource_type if draft.resource_type in ResourceType.__members__ else "other"
-    year = draft.year if draft.year and 1000 <= draft.year <= 2100 else None
-    return {
-        "resource_type": ResourceType(rtype),
-        "title": draft.title,
-        "author": draft.author or None,
-        "editor": draft.editor or None,
-        "year": year,
-        "publisher": draft.publisher,
-        "place_of_publication": draft.place_of_publication,
-        "edition": draft.edition,
-        "volume": draft.volume,
-        "issue": draft.issue,
-        "pages": draft.pages,
-        "isbn": draft.isbn,
-        "issn": draft.issn,
-        "doi": draft.doi,
-        "url": url,
-        "metadata_": draft.metadata or {},
-    }
+def _fields_or_422(candidate: Candidate) -> dict:
+    try:
+        return citation_fields(candidate)
+    except UnusableRecord as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.post("/ingest/lookup", response_model=LookupResponse, summary="Look up a citation by identifier")
@@ -177,7 +156,7 @@ async def create_from_source(
         source_status="ok" if candidate.authoritative else None,
         source_synced_at=now if candidate.authoritative else None,
         created_by=current_user.id,
-        **citation_fields(candidate),
+        **_fields_or_422(candidate),
     )
     db.add(citation)
     await svc.touch_list(db, section.reading_list_id)

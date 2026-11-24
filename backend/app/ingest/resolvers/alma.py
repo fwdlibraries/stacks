@@ -1,10 +1,14 @@
 """Alma: the library's authoritative bibliographic records (Bibs API)."""
+import logging
+
 from app.ingest import marc
 from app.ingest.candidate import Candidate, SourceError
 from app.ingest.draft import NormalizationError
 from app.ingest.identifiers import Identifier
 from app.ingest.resolvers import primo
 from app.ingest.resolvers.base import ResolveContext, Resolver, get_json
+
+logger = logging.getLogger(__name__)
 
 # Several records can share an ISBN (print/electronic, editions); offer a few
 MAX_ISBN_MATCHES = 5
@@ -52,20 +56,58 @@ class AlmaResolver(Resolver):
             # Alma answers an unknown or malformed MMS ID with HTTP 400 rather than 404
             not_found=(400, 404),
         )
-        if not bib or not bib.get("anies"):
-            return None
-        try:
-            draft = marc.to_draft(marc.parse_marcxml(bib["anies"][0]))
-        except NormalizationError as exc:
-            raise SourceError("Alma", f"returned a record Stacks can't read ({exc})") from exc
-        return Candidate(
-            draft=draft,
-            source_system=self.system,
-            source_identifier=bib.get("mms_id") or source_identifier,
-            match_method="identifier",
-            confidence=1.0,
-            raw={k: bib.get(k) for k in ("mms_id", "suppress_from_publishing", "record_format", "anies")},
+        return bib_to_candidate(bib, source_identifier) if bib and bib.get("anies") else None
+
+
+def bib_to_candidate(bib: dict, mms_id: str | None = None) -> Candidate:
+    """An Alma Bibs API record (JSON with MARC XML in `anies`) as a candidate."""
+    try:
+        draft = marc.to_draft(marc.parse_marcxml(bib["anies"][0]))
+    except NormalizationError as exc:
+        raise SourceError("Alma", f"returned a record Stacks can't read ({exc})") from exc
+    return Candidate(
+        draft=draft,
+        source_system="alma",
+        source_identifier=bib.get("mms_id") or mms_id or "",
+        match_method="identifier",
+        confidence=1.0,
+        raw={k: bib.get(k) for k in ("mms_id", "suppress_from_publishing", "record_format", "anies")},
+    )
+
+
+def is_suppressed(bib_raw: dict) -> bool:
+    """Hidden from discovery: students can't find it in Primo."""
+    return str(bib_raw.get("suppress_from_publishing", "")).lower() == "true"
+
+
+async def fetch_many(mms_ids: list[str], ctx: ResolveContext) -> dict[str, Candidate | None]:
+    """Full records for many MMS IDs, 100 per call. IDs Alma doesn't hold are absent.
+
+    A record Stacks can't parse maps to None (and is logged): absent means "not
+    found", so the sync only flags records Alma really lacks.
+    """
+    source = ctx.sources["alma"]
+    found: dict[str, Candidate | None] = {}
+    ids = [m for m in dict.fromkeys(mms_ids) if m.isdigit()]
+    for start in range(0, len(ids), 100):
+        chunk = ids[start : start + 100]
+        data = await get_json(
+            ctx,
+            "Alma",
+            f"{source.config.api_base}/almaws/v1/bibs",
+            params={"mms_id": ",".join(chunk), "view": "full"},
+            headers={"Authorization": f"apikey {source.api_key}", "Accept": "application/json"},
+            not_found=(400, 404),
         )
+        for bib in (data or {}).get("bib") or []:
+            if not bib.get("anies") or not bib.get("mms_id"):
+                continue
+            try:
+                found[bib["mms_id"]] = bib_to_candidate(bib)
+            except SourceError:
+                logger.warning("Alma record %s can't be parsed; leaving its citations unchanged", bib["mms_id"])
+                found[bib["mms_id"]] = None
+    return found
 
 
 async def held(mms_ids: list[str], ctx: ResolveContext) -> set[str]:

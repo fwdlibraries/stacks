@@ -43,3 +43,22 @@ export function useLinkCheck() {
     },
   })
 }
+
+export interface CitationEvent {
+  occurred_at: string
+  kind: 'updated' | 'missing' | 'suppressed' | 'restored' | string
+  source_system?: string | null
+  details: Record<string, [unknown, unknown]>
+}
+
+/** What the catalogue sync changed, newest first */
+export function useCitationHistory(citationId: string | undefined) {
+  return useQuery({
+    queryKey: ['citations', citationId, 'history'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<CitationEvent[]>(`/citations/${citationId}/history`)
+      return data
+    },
+    enabled: Boolean(citationId),
+  })
+}

@@ -6,7 +6,7 @@ celery_app = Celery(
     "stacks",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.import_tasks"],
+    include=["app.tasks.import_tasks", "app.tasks.sync_tasks"],
 )
 
 celery_app.conf.update(

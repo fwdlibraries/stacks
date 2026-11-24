@@ -44,6 +44,26 @@ services:
     networks:
       - stacks
 
+  # Celery beat: schedules periodic tasks (the nightly catalogue sync) for the worker.
+  # Run exactly one.
+  beat:
+    image: ghcr.io/fwdlibraries/stacks/backend:${STACKS_VERSION:-latest}
+    build:
+      context: ../backend
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
+    restart: unless-stopped
+    healthcheck:
+      disable: true
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-stacks}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-stacks}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - stacks
+
   frontend:
     image: ghcr.io/fwdlibraries/stacks/frontend:${STACKS_VERSION:-latest}
     build:

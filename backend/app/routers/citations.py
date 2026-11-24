@@ -1,12 +1,14 @@
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.models import Citation, ImportItem, User
+from app.models.models import Citation, CitationEvent, ImportItem, User
 from app.schemas.lists import (
     BOUND_EDITABLE_FIELDS,
     CitationCreate,
@@ -159,3 +161,33 @@ async def unlink_citation(
     await db.flush()
     await db.refresh(citation)
     return citation
+
+
+class CitationEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    occurred_at: datetime
+    kind: str
+    source_system: str | None = None
+    details: dict
+
+
+@router.get(
+    "/citations/{citation_id}/history",
+    response_model=list[CitationEventOut],
+    summary="Changes made by the catalogue sync",
+)
+async def citation_history(
+    citation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Newest first: updates from the catalogue, and records going missing or coming back."""
+    citation = await svc.get_citation(db, current_user, citation_id)
+    events = await db.scalars(
+        select(CitationEvent)
+        .where(CitationEvent.citation_id == citation.id)
+        .order_by(CitationEvent.occurred_at.desc(), CitationEvent.id.desc())
+        .limit(50)
+    )
+    return list(events)

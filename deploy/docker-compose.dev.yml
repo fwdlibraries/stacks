@@ -20,6 +20,10 @@ services:
     environment:
       DEBUG: "true"
 
+  beat:
+    volumes:
+      - ../backend:/app
+
   frontend:
     build:
       context: ../frontend
