@@ -168,7 +168,7 @@ export function CitationFormModal({
 
       <Row>
         {show.isbn && <Col md={6}>{field('isbn', 'ISBN')}</Col>}
-        <Col md={show.isbn ? 6 : 12}>{field('doi', 'DOI', { help: 'Links students to the DOI when set.' })}</Col>
+        <Col md={show.isbn ? 6 : 12}>{field('doi', 'DOI', { help: 'Helps your library link students to the full text.' })}</Col>
       </Row>
       {field('url', 'URL', { type: 'url' })}
     </>

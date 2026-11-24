@@ -16,6 +16,7 @@ from app.schemas.lists import (
     StaffReadingList,
     StaffSection,
 )
+from app.services import links
 from app.services import lists_service as svc
 
 router = APIRouter()
@@ -47,7 +48,8 @@ async def get_reading_list_full(
     db: AsyncSession = Depends(get_db),
 ):
     """Compound document: the list, its sections and their citations, including staff notes."""
-    return await svc.get_list(db, current_user, list_id, full=True)
+    reading_list = await svc.get_list(db, current_user, list_id, full=True)
+    return links.annotate(reading_list, await links.load_link_settings(db, current_user.organization_id))
 
 
 @router.patch("/lists/{list_id}", response_model=ReadingListSummary, summary="Update list details")
