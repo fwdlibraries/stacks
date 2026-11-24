@@ -45,9 +45,9 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as RetriableConfig | undefined
     const path = window.location.pathname
-    // The public student view is never authenticated, and a 401 from the login
-    // call means bad credentials, which the login form shows itself.
-    const isLoginCall = config?.url === '/auth/local/login'
+    // The public student view is never authenticated, and a 401 from a sign-in
+    // call (password login, LTI code exchange) is shown by the page that made it.
+    const isLoginCall = config?.url === '/auth/local/login' || config?.url === '/auth/lti/exchange'
     if (
       error.response?.status !== 401 ||
       !config ||
