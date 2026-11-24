@@ -94,6 +94,17 @@ async def test_libkey_wins_when_it_finds_the_article():
     assert router.requests[0].url.params["access_token"] == "token"
 
 
+async def test_libkey_without_a_direct_link_moves_on():
+    # Seen live: LibKey answers 200 with empty link fields (e.g. JSTOR) rather than 404
+    router = Router()
+    router.add(LIBKEY, {"data": {"fullTextFile": "", "contentLocation": "", "retractionNoticeUrl": None,
+                                 "linkResolverOpenUrl": "https://primo/openurl"}})
+    router.xml[ALMA] = cto({"keys": {"package_public_name": "JSTOR"}, "url": "https://alma/jstor"})
+    found, steps = await run(router, make(doi="10.1/x"), context())
+    assert (found.step, found.detail) == ("alma", "JSTOR")
+    assert steps == [("libkey", "not_found"), ("alma", "found")]
+
+
 async def test_libkey_sends_retracted_articles_to_the_notice():
     router = Router()
     router.add(LIBKEY, {"data": {"retractionNoticeUrl": "https://notice", "fullTextFile": "https://pdf"}})
