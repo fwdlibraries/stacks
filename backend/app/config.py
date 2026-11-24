@@ -1,5 +1,4 @@
 import re
-from typing import Optional
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -21,9 +20,9 @@ class Settings(BaseSettings):
     # S3 / Object Storage
     s3_bucket: str = "stacks-files"
     s3_region: str = "us-east-1"
-    s3_endpoint_url: Optional[str] = None  # for S3-compatible services (MinIO etc.)
-    aws_access_key_id: Optional[str] = None
-    aws_secret_access_key: Optional[str] = None
+    s3_endpoint_url: str | None = None  # for S3-compatible services (MinIO etc.)
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
     s3_presigned_url_expiry: int = 900  # 15 minutes
 
     # Auth
@@ -44,10 +43,10 @@ class Settings(BaseSettings):
     yaz_gateway_url: str = "http://yaz:8080"
 
     # Email
-    smtp_host: Optional[str] = None
+    smtp_host: str | None = None
     smtp_port: int = 587
-    smtp_user: Optional[str] = None
-    smtp_password: Optional[str] = None
+    smtp_user: str | None = None
+    smtp_password: str | None = None
     email_from: str = "noreply@example.com"
 
     @field_validator("frame_ancestors")

@@ -1,5 +1,6 @@
-from app.importers.z3950 import Z3950Handler
 from app.importers.manual import ManualEntryHandler
+from app.importers.z3950 import Z3950Handler
+
 
 def get_handler(source: str):
     handlers = {

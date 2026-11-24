@@ -63,8 +63,17 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line length: not enforced
+    "UP042",  # (str, Enum) → StrEnum changes str() output; not a pure style fix
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom: calls in argument defaults are intended
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body", "fastapi.Path", "fastapi.Form"]
 
 [tool.mypy]
 python_version = "3.12"

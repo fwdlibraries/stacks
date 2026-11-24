@@ -1,10 +1,11 @@
-from typing import AsyncIterator
+import io
+from collections.abc import AsyncIterator
+
 import httpx
 import pymarc
-import io
 
-from app.importers.base import ImportHandler, RawRecord, CitationDraft, NormalizationError
 from app.config import settings
+from app.importers.base import CitationDraft, ImportHandler, NormalizationError, RawRecord
 
 
 class Z3950Handler(ImportHandler):
@@ -56,7 +57,7 @@ class Z3950Handler(ImportHandler):
             marcxml = raw.data["marcxml"]
             record = pymarc.parse_xml_to_array(io.StringIO(marcxml))[0]
         except Exception as e:
-            raise NormalizationError(f"Failed to parse MARC record: {e}")
+            raise NormalizationError(f"Failed to parse MARC record: {e}") from e
 
         return CitationDraft(
             title=self._get_title(record),
