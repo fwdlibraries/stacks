@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     ARRAY,
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -256,6 +257,25 @@ class LibrarySource(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ─── Link clicks ──────────────────────────────────────────────────────────────
+
+class LinkClick(Base):
+    """One student click on a citation link (via /go). Deliberately anonymous:
+    no user, IP address or browser details, only what instructors' stats need."""
+    __tablename__ = "link_clicks"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    citation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("citations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reading_list_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("reading_lists.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    clicked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Which resolver answered: 'libkey' | 'alma' | 'open_access' | 'fallback'
+    resolved_by: Mapped[str | None] = mapped_column(Text)
 
 
 # ─── Uploaded Files ───────────────────────────────────────────────────────────

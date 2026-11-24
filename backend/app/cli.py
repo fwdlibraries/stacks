@@ -7,7 +7,9 @@
     python -m app.cli configure-source --org demo --kind alma --region na
     python -m app.cli configure-source --org demo --kind primo --region na \
         --vid 01ABC_INST:MAIN --discovery-url https://abc.primo.exlibrisgroup.com [--tab ... --scope ...]
+    python -m app.cli configure-source --org demo --kind libkey --library-id 1234
     python -m app.cli list-sources --org demo
+    python -m app.cli configure-links --org demo --stack libkey,alma,open_access [--cache-hours 6] [--timeout 2.5]
     python -m app.cli lookup --org demo "10.1000/xyz 978-0-14-044913-6"
     python -m app.cli generate-credentials-key
 
@@ -171,6 +173,8 @@ async def configure_source(args: argparse.Namespace) -> None:
         # Start from the stored settings so a re-run only needs the options that change
         config = dict(source.config) if source else {}
         options = {
+            "library_id": args.library_id,
+            "resolver_url": args.resolver_url,
             "region": args.region,
             "vid": args.vid,
             "tab": args.tab,
@@ -185,10 +189,11 @@ async def configure_source(args: argparse.Namespace) -> None:
             sys.exit(f"Invalid {args.kind} settings:\n{exc}")
 
         if source is None or not args.keep_key:
+            label = "LibKey API access token" if args.kind == "libkey" else f"{args.kind.capitalize()} API key"
             if args.api_key_stdin:
                 api_key = sys.stdin.readline().strip()
             else:
-                api_key = getpass.getpass(f"{args.kind.capitalize()} API key: ").strip()
+                api_key = getpass.getpass(f"{label}: ").strip()
             if not api_key:
                 sys.exit("An API key is required.")
         if source is None:
@@ -201,6 +206,33 @@ async def configure_source(args: argparse.Namespace) -> None:
         await db.commit()
     state = "disabled" if args.disable else "active"
     print(f"{args.kind} source for '{org.name}' saved ({state}): {validated.model_dump()}")
+
+
+async def configure_links(args: argparse.Namespace) -> None:
+    from pydantic import ValidationError
+
+    from app.services.resolution import ResolutionConfig
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        current = dict(org.link_resolver_settings or {})
+        if args.stack is not None:
+            current["stack"] = [s.strip() for s in args.stack.split(",") if s.strip()]
+        if args.cache_hours is not None:
+            current["cache_ttl_seconds"] = int(args.cache_hours * 3600)
+        if args.timeout is not None:
+            current["step_timeout_seconds"] = args.timeout
+        try:
+            config = ResolutionConfig.model_validate(current)
+        except ValidationError as exc:
+            sys.exit(f"Invalid link settings:\n{exc}")
+        org.link_resolver_settings = config.model_dump()
+        await db.commit()
+    stack = " → ".join(config.stack) or "(none: plain links)"
+    print(
+        f"Links for '{org.name}': {stack} → fallback; cache {config.cache_ttl_seconds / 3600:g} h; "
+        f"step timeout {config.step_timeout_seconds:g} s"
+    )
 
 
 async def list_sources(args: argparse.Namespace) -> None:
@@ -259,16 +291,24 @@ def main() -> None:
 
     p = sub.add_parser("configure-source", help="Connect an organization to Alma or Primo")
     p.add_argument("--org", required=True, help="Organization slug")
-    p.add_argument("--kind", required=True, choices=["alma", "primo"])
+    p.add_argument("--kind", required=True, choices=["alma", "primo", "libkey"])
     p.add_argument("--region", choices=["na", "eu", "ap", "aps", "ca", "cn"], help="Ex Libris API region")
     p.add_argument("--vid", help="Primo view ID, e.g. 01ABC_INST:MAIN")
     p.add_argument("--tab", help="Primo search tab (default Everything)")
     p.add_argument("--scope", help="Primo search scope (default MyInst_and_CI)")
     p.add_argument("--discovery-url", help="Primo origin, e.g. https://abc.primo.exlibrisgroup.com")
     p.add_argument("--interface", choices=["nde", "ve"], help="Primo interface students use (default nde)")
+    p.add_argument("--resolver-url", help="Alma origin for its link resolver (default: derived from Primo)")
+    p.add_argument("--library-id", type=int, help="LibKey library ID")
     p.add_argument("--api-key-stdin", action="store_true", help="Read the API key from stdin")
     p.add_argument("--keep-key", action="store_true", help="Update settings but keep the stored API key")
     p.add_argument("--disable", action="store_true", help="Save but don't use this source")
+
+    p = sub.add_parser("configure-links", help="Set the link resolver stack, cache and timeout")
+    p.add_argument("--org", required=True)
+    p.add_argument("--stack", help="Comma-separated, in order: libkey,alma,open_access ('' for plain links)")
+    p.add_argument("--cache-hours", type=float, help="Reuse a resolved link for this long (default 6)")
+    p.add_argument("--timeout", type=float, help="Seconds before a slow step is skipped (default 2.5)")
 
     p = sub.add_parser("list-sources", help="Show an organization's library sources (never the keys)")
     p.add_argument("--org", required=True)
@@ -286,6 +326,8 @@ def main() -> None:
         asyncio.run(register_lti_platform(args))
     elif args.command == "configure-source":
         asyncio.run(configure_source(args))
+    elif args.command == "configure-links":
+        asyncio.run(configure_links(args))
     elif args.command == "list-sources":
         asyncio.run(list_sources(args))
     elif args.command == "lookup":

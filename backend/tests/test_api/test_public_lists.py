@@ -137,9 +137,10 @@ async def test_links_follow_the_current_discovery_settings(client: AsyncClient, 
     resp = await client.get(URL)
     assert resp.json()["sections"][0]["citations"][0]["link_url"] is None
 
-    org_id = await db_session.scalar(select(Organization.id).where(Organization.slug == "test-org"))
+    org = await db_session.scalar(select(Organization).where(Organization.slug == "test-org"))
+    org.link_resolver_settings = {"stack": []}  # plain links: no live resolver calls in this test
     source = LibrarySource(
-        organization_id=org_id,
+        organization_id=org.id,
         kind="primo",
         config={"region": "na", "vid": "01TEST_INST:NDE", "discovery_url": "https://test.primo.exlibrisgroup.com"},
     )
@@ -147,11 +148,12 @@ async def test_links_follow_the_current_discovery_settings(client: AsyncClient, 
     await db_session.commit()
 
     linked = (await client.get(URL)).json()["sections"][0]["citations"][0]
-    assert linked["link_kind"] == "library_record"
-    assert linked["link_url"].startswith("https://test.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma991234567890123")
+    assert (linked["link_url"], linked["link_kind"]) == (f"/api/v1/go/{citation.id}", "library_record")
+    target = (await client.get(linked["link_url"], params={"preview": "true"})).headers["location"]
+    assert target.startswith("https://test.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma991234567890123")
 
     # Nothing is stored: changing the discovery settings changes every link at once
     source.config = {**source.config, "discovery_url": "https://new.primo.exlibrisgroup.com"}
     await db_session.commit()
-    moved = (await client.get(URL)).json()["sections"][0]["citations"][0]
-    assert moved["link_url"].startswith("https://new.primo.exlibrisgroup.com/")
+    target = (await client.get(linked["link_url"], params={"preview": "true"})).headers["location"]
+    assert target.startswith("https://new.primo.exlibrisgroup.com/")

@@ -10,6 +10,7 @@ from app.routers import (
     auth,
     citations,
     files,
+    go,
     health,
     imports,
     ingest,
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(lists.router,     prefix="/api/v1",           tags=["Reading Lists"])
     app.include_router(citations.router, prefix="/api/v1",           tags=["Citations"])
     app.include_router(ingest.router,    prefix="/api/v1",           tags=["Ingest"])
+    app.include_router(go.router,        prefix="/api/v1",           tags=["Links"])
     app.include_router(imports.router,   prefix="/api/v1/citations", tags=["Import"])
     app.include_router(files.router,     prefix="/api/v1/files",     tags=["Files"])
     app.include_router(users.router,     prefix="/api/v1",           tags=["Users"])

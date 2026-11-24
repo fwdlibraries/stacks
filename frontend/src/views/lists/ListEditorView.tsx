@@ -18,6 +18,7 @@ import {
   type ListSection,
 } from '@/api/hooks/useLists'
 import { useCreateFromSource } from '@/api/hooks/useIngest'
+import { useListClicks } from '@/api/hooks/useLinks'
 import { apiErrorMessage } from '@/lib/apiError'
 import { CitationCard } from '@/components/citations/CitationCard'
 import { CitationFormModal } from '@/components/citations/CitationFormModal'
@@ -45,6 +46,7 @@ export default function ListEditorView() {
   const { listId = '' } = useParams<{ listId: string }>()
   const { data: list, isLoading, isError } = useReadingListFull(listId)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const clicks = useListClicks(listId)
 
   const setPublished = useSetPublished(listId)
   const applyOrder = useApplyOrder(listId)
@@ -204,6 +206,8 @@ export default function ListEditorView() {
                         <CitationCard
                           citation={citation}
                           showStaffNote
+                          linkPreview
+                          clicks={list.is_published ? (clicks.data?.[citation.id] ?? { total: 0, last_30_days: 0 }) : undefined}
                           isDragging={isDragging}
                           dragHandle={citationHandle}
                           onEdit={(c) => open({ kind: 'citation', section, citation: c })}
