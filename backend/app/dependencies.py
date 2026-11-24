@@ -1,20 +1,24 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 
-security = HTTPBearer()
+# auto_error=False so a missing header is a 401 (not 403), like an invalid token
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ):
     """Resolve a Bearer token to an active User."""
     from app.services.auth_service import AuthService
-    token = credentials.credentials
-    user = await AuthService.get_user_from_token(token, db)
+    user = (
+        await AuthService.get_user_from_token(credentials.credentials, db)
+        if credentials is not None
+        else None
+    )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

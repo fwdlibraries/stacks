@@ -24,7 +24,7 @@ dependencies = [
 
     # Auth & Security
     "passlib[bcrypt]>=1.7",
-    "python-jose[cryptography]>=3.3",
+    "PyJWT>=2.8",
     "python-multipart>=0.0.12",
 
     # LTI 1.3
