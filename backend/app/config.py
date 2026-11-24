@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://stacks:stacks@db:5432/stacks"
+    sql_echo: bool = False  # log every SQL statement with its parameters (local debugging only)
 
     # Redis
     redis_url: str = "redis://redis:6379/0"
