@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://stacks:stacks@db:5432/stacks"
+    sql_echo: bool = False  # log every SQL statement with its parameters (local debugging only)
 
     # Redis
     redis_url: str = "redis://redis:6379/0"
@@ -38,6 +39,14 @@ class Settings(BaseSettings):
     # LMS origins allowed to show Stacks in an iframe (space-separated), e.g.
     # "https://lms.example.edu https://*.instructure.com". Empty: same-origin only.
     frame_ancestors: str = ""
+
+    # Encrypts stored credentials such as library API keys (Fernet key, see
+    # `python -m app.cli generate-credentials-key`). Empty: derived from SECRET_KEY,
+    # which then can't be rotated without re-entering those credentials.
+    credentials_key: str = ""
+
+    # Contact address sent to open metadata APIs (Crossref "polite pool"). Optional.
+    metadata_contact_email: str = ""
 
     # Z39.50 / YAZ sidecar gateway
     yaz_gateway_url: str = "http://yaz:8080"

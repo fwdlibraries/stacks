@@ -13,9 +13,11 @@ import {
   useUpdateCitation,
   useUpdateList,
   useUpdateSection,
+  useUnlinkCitation,
   type Citation,
   type ListSection,
 } from '@/api/hooks/useLists'
+import { useCreateFromSource } from '@/api/hooks/useIngest'
 import { apiErrorMessage } from '@/lib/apiError'
 import { CitationCard } from '@/components/citations/CitationCard'
 import { CitationFormModal } from '@/components/citations/CitationFormModal'
@@ -53,8 +55,20 @@ export default function ListEditorView() {
   const createCitation = useCreateCitation()
   const updateCitation = useUpdateCitation()
   const deleteCitation = useDeleteCitation()
+  const createFromSource = useCreateFromSource()
+  const unlinkCitation = useUnlinkCitation()
 
-  const mutations = [updateList, createSection, updateSection, deleteSection, createCitation, updateCitation, deleteCitation]
+  const mutations = [
+    updateList,
+    createSection,
+    updateSection,
+    deleteSection,
+    createCitation,
+    updateCitation,
+    deleteCitation,
+    createFromSource,
+    unlinkCitation,
+  ]
   const open = (next: Dialog) => {
     mutations.forEach((m) => m.reset()) // don't show a previous dialog's error
     setDialog(next)
@@ -272,6 +286,21 @@ export default function ListEditorView() {
               : createCitation.mutate({ sectionId: dialog.section.id, ...input }, { onSuccess: close })
           }
           onCancel={close}
+          onAddFromSource={(candidate, input) =>
+            createFromSource.mutate(
+              {
+                sectionId: dialog.section.id,
+                source_system: candidate.source_system,
+                source_identifier: candidate.source_identifier,
+                ...input,
+              },
+              { onSuccess: close }
+            )
+          }
+          isAddingFromSource={createFromSource.isPending}
+          addFromSourceError={errorOf(createFromSource, 'That record could not be added.')}
+          onUnlink={dialog.citation ? () => unlinkCitation.mutateAsync(dialog.citation!.id) : undefined}
+          unlinkError={errorOf(unlinkCitation, 'The citation could not be unlinked.')}
         />
       )}
 

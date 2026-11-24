@@ -4,9 +4,16 @@
     python -m app.cli register-lti-platform --org demo --issuer https://lms.example.edu \
         --client-id ... --auth-login-url ... --auth-token-url ... --jwks-url ... \
         --deployment-id 1 [--deployment-id 2 ...]
+    python -m app.cli configure-source --org demo --kind alma --region na
+    python -m app.cli configure-source --org demo --kind primo --region na \
+        --vid 01ABC_INST:MAIN --discovery-url https://abc.primo.exlibrisgroup.com [--tab ... --scope ...]
+    python -m app.cli list-sources --org demo
+    python -m app.cli lookup --org demo "10.1000/xyz 978-0-14-044913-6"
+    python -m app.cli generate-credentials-key
 
-The password is prompted for (or read from stdin with --password-stdin), never
-passed as an argument, so it doesn't end up in shell history or `ps` output.
+Passwords and API keys are prompted for (or read from stdin with --password-stdin /
+--api-key-stdin), never passed as arguments, so they don't end up in shell history
+or `ps` output.
 """
 import argparse
 import asyncio
@@ -23,6 +30,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.models import (
     IdentityProvider,
+    LibrarySource,
     LtiDeployment,
     LtiPlatform,
     Organization,
@@ -142,6 +150,93 @@ async def register_lti_platform(args: argparse.Namespace) -> None:
     )
 
 
+async def _get_org(db, slug: str) -> Organization:
+    org = await db.scalar(select(Organization).where(Organization.slug == slug))
+    if org is None:
+        sys.exit(f"No organization with slug '{slug}'.")
+    return org
+
+
+async def configure_source(args: argparse.Namespace) -> None:
+    from pydantic import ValidationError
+
+    from app.ingest.sources import SOURCE_CONFIGS
+    from app.services import credentials
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        source = await db.scalar(
+            select(LibrarySource).where(LibrarySource.organization_id == org.id, LibrarySource.kind == args.kind)
+        )
+        # Start from the stored settings so a re-run only needs the options that change
+        config = dict(source.config) if source else {}
+        options = {
+            "region": args.region,
+            "vid": args.vid,
+            "tab": args.tab,
+            "scope": args.scope,
+            "discovery_url": args.discovery_url,
+            "interface": args.interface,
+        }
+        config.update({k: v for k, v in options.items() if v is not None})
+        try:
+            validated = SOURCE_CONFIGS[args.kind].model_validate(config)
+        except ValidationError as exc:
+            sys.exit(f"Invalid {args.kind} settings:\n{exc}")
+
+        if source is None or not args.keep_key:
+            if args.api_key_stdin:
+                api_key = sys.stdin.readline().strip()
+            else:
+                api_key = getpass.getpass(f"{args.kind.capitalize()} API key: ").strip()
+            if not api_key:
+                sys.exit("An API key is required.")
+        if source is None:
+            source = LibrarySource(organization_id=org.id, kind=args.kind)
+            db.add(source)
+        source.config = validated.model_dump()
+        if source.api_key_encrypted is None or not args.keep_key:
+            source.api_key_encrypted = credentials.encrypt(api_key)
+        source.is_active = not args.disable
+        await db.commit()
+    state = "disabled" if args.disable else "active"
+    print(f"{args.kind} source for '{org.name}' saved ({state}): {validated.model_dump()}")
+
+
+async def list_sources(args: argparse.Namespace) -> None:
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        rows = (await db.scalars(select(LibrarySource).where(LibrarySource.organization_id == org.id))).all()
+    if not rows:
+        print(f"No library sources configured for '{org.name}'.")
+    for row in rows:
+        key = "key set" if row.api_key_encrypted else "no key"
+        print(f"{row.kind:6} {'active' if row.is_active else 'disabled':8} {key:7} {row.config}")
+
+
+async def lookup(args: argparse.Namespace) -> None:
+    import httpx
+
+    from app.ingest import pipeline
+    from app.ingest.resolvers import ResolveContext
+    from app.ingest.sources import load_sources
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        sources = await load_sources(db, org.id)
+    async with httpx.AsyncClient(timeout=15.0) as http:
+        result = await pipeline.lookup(args.query, ResolveContext(http=http, sources=sources))
+    print("Sources:", ", ".join(sources) or "none configured (open sources only)")
+    print("Identifiers:", ", ".join(f"{i.kind}={i.value}" for i in result.identifiers) or "none found")
+    for warning in result.warnings:
+        print("Warning:", warning)
+    for c in result.candidates:
+        d = c.draft
+        names = "; ".join(d.author or []) or "-"
+        print(f"\n[{c.source_system} {c.source_identifier}] {c.match_method}, confidence {c.confidence:.2f}")
+        print(f"  {d.title}\n  {names} ({d.year or 'n.d.'}) {d.resource_type}  isbn={d.isbn} doi={d.doi}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -162,11 +257,42 @@ def main() -> None:
     p.add_argument("--jwks-url", help="Platform public keyset URL")
     p.add_argument("--deployment-id", action="append", required=True, help="Deployment ID (repeatable)")
 
+    p = sub.add_parser("configure-source", help="Connect an organization to Alma or Primo")
+    p.add_argument("--org", required=True, help="Organization slug")
+    p.add_argument("--kind", required=True, choices=["alma", "primo"])
+    p.add_argument("--region", choices=["na", "eu", "ap", "aps", "ca", "cn"], help="Ex Libris API region")
+    p.add_argument("--vid", help="Primo view ID, e.g. 01ABC_INST:MAIN")
+    p.add_argument("--tab", help="Primo search tab (default Everything)")
+    p.add_argument("--scope", help="Primo search scope (default MyInst_and_CI)")
+    p.add_argument("--discovery-url", help="Primo origin, e.g. https://abc.primo.exlibrisgroup.com")
+    p.add_argument("--interface", choices=["nde", "ve"], help="Primo interface students use (default nde)")
+    p.add_argument("--api-key-stdin", action="store_true", help="Read the API key from stdin")
+    p.add_argument("--keep-key", action="store_true", help="Update settings but keep the stored API key")
+    p.add_argument("--disable", action="store_true", help="Save but don't use this source")
+
+    p = sub.add_parser("list-sources", help="Show an organization's library sources (never the keys)")
+    p.add_argument("--org", required=True)
+
+    p = sub.add_parser("lookup", help="Run a citation lookup as the organization would")
+    p.add_argument("--org", required=True)
+    p.add_argument("query", help="DOI, ISBN, MMS ID, or text containing them")
+
+    sub.add_parser("generate-credentials-key", help="Print a new CREDENTIALS_KEY value")
+
     args = parser.parse_args()
     if args.command == "create-user":
         asyncio.run(create_user(args))
     elif args.command == "register-lti-platform":
         asyncio.run(register_lti_platform(args))
+    elif args.command == "configure-source":
+        asyncio.run(configure_source(args))
+    elif args.command == "list-sources":
+        asyncio.run(list_sources(args))
+    elif args.command == "lookup":
+        asyncio.run(lookup(args))
+    elif args.command == "generate-credentials-key":
+        from app.services.credentials import generate_key
+        print(generate_key())
 
 
 if __name__ == "__main__":

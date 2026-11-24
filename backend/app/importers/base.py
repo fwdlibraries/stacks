@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+# Defined with the ingest pipeline (shared by importers and resolvers); re-exported here
+from app.ingest.draft import CitationDraft, NormalizationError  # noqa: F401
 
 
 @dataclass
@@ -10,41 +13,6 @@ class RawRecord:
     source: str
     failed: bool = False
     error: str | None = None
-
-
-@dataclass
-class CitationDraft:
-    """
-    Normalized citation data extracted from any import source.
-    Maps 1:1 to the citations table schema.
-    Fields are Optional — quality assessment determines which are missing.
-    """
-    title: str | None = None
-    resource_type: str | None = None
-    author: list[str] | None = field(default_factory=list)
-    editor: list[str] | None = field(default_factory=list)
-    year: int | None = None
-    publisher: str | None = None
-    place_of_publication: str | None = None
-    edition: str | None = None
-    volume: str | None = None
-    issue: str | None = None
-    pages: str | None = None
-    isbn: str | None = None
-    issn: str | None = None
-    doi: str | None = None
-    url: str | None = None
-    metadata: dict = field(default_factory=dict)
-    student_note: str | None = None
-    staff_note: str | None = None
-
-    # Import management fields (not stored on citation)
-    section_title: str | None = None
-
-    def is_incomplete(self) -> bool:
-        """Returns True if key fields are missing — used to gate AI enrichment."""
-        required = [self.title, self.author, self.year]
-        return not all(required)
 
 
 class ImportHandler(ABC):
@@ -103,11 +71,6 @@ class ImportHandler(ABC):
         score = round(present / len(key_fields), 2)
 
         return score, warnings
-
-
-class NormalizationError(Exception):
-    """Raised when a raw record cannot be normalized to a CitationDraft."""
-    pass
 
 
 class ImportValidationError(Exception):

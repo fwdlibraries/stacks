@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Card, Badge, Button } from 'react-bootstrap'
+import { Books } from '@phosphor-icons/react'
 import { resolveCitationLink, getLinkLabel } from '@/lib/citationLink'
 import type { Citation } from '@/api/hooks/useLists'
 
@@ -75,6 +76,19 @@ export function CitationCard({
             >
               {RESOURCE_TYPE_LABELS[citation.resource_type] ?? citation.resource_type}
             </Badge>
+
+            {citation.is_bound && (
+              <Badge
+                bg="light"
+                text="dark"
+                className="me-2 mb-1"
+                style={{ fontSize: '0.7rem' }}
+                title="Details come from your library's catalogue and update automatically"
+              >
+                <Books aria-hidden="true" className="me-1" />
+                Library record
+              </Badge>
+            )}
 
             {!citation.is_required && (
               <Badge bg="light" text="dark" className="me-2 mb-1" style={{ fontSize: '0.7rem' }}>

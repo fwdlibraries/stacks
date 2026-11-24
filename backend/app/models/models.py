@@ -2,7 +2,17 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ARRAY, Boolean, DateTime, ForeignKey, Integer, Text, func
+from sqlalchemy import (
+    ARRAY,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -192,6 +202,15 @@ class Citation(Base):
     source_identifier: Mapped[str | None] = mapped_column(Text)
     raw_import_data: Mapped[dict | None] = mapped_column(JSONB)
 
+    # Binding to the source record (see app/ingest). How the record was matched and
+    # how sure that match is; a later AI resolver reports through the same fields.
+    match_method: Mapped[str | None] = mapped_column(Text)        # 'identifier' | 'search' | ...
+    match_confidence: Mapped[float | None] = mapped_column(Float)  # 0.0–1.0
+    # None/'ok' while the source record is live; 'missing' | 'unavailable' set by sync;
+    # 'unlinked' when staff detached the citation to edit it locally
+    source_status: Mapped[str | None] = mapped_column(Text)
+    source_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     # Type-specific overflow metadata
     metadata_: Mapped[dict] = mapped_column("metadata", JSONB, default={})
 
@@ -210,6 +229,33 @@ class Citation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     section: Mapped[ListSection] = relationship(back_populates="citations")
+
+    @property
+    def is_bound(self) -> bool:
+        """Bibliographic fields come from (and are kept in sync with) the library's system."""
+        from app.ingest.candidate import AUTHORITATIVE_SOURCES
+        return self.source_system in AUTHORITATIVE_SOURCES and self.source_status != "unlinked"
+
+
+# ─── Library sources (discovery / catalogue connections) ──────────────────────
+
+class LibrarySource(Base):
+    """An org's connection to a library system (Alma, Primo). One per kind per org.
+
+    `config` holds non-secret settings (API host, institution, view); the API key
+    is stored encrypted (app/services/credentials.py) and never returned by the API.
+    """
+    __tablename__ = "library_sources"
+    __table_args__ = (UniqueConstraint("organization_id", "kind"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)  # 'alma' | 'primo'
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 # ─── Uploaded Files ───────────────────────────────────────────────────────────

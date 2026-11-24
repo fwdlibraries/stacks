@@ -40,6 +40,13 @@ export interface Citation {
   is_required: boolean
   sort_order: number
   metadata: Record<string, unknown>
+  /** Staff only. Bound: bibliographic fields come from the library's system and are read-only */
+  is_bound?: boolean
+  source_system?: string | null
+  source_identifier?: string | null
+  /** 'ok' | 'missing' | 'unavailable' (set by sync) | 'unlinked' */
+  source_status?: string | null
+  source_synced_at?: string | null
 }
 
 export interface ListSection {
@@ -151,7 +158,7 @@ export interface ListDetailsInput {
  * Mutation that refreshes every list query afterwards ('lists' prefix covers the
  * index, the full list and the summary).
  */
-function useListMutation<TVars, TData = unknown>(mutationFn: (vars: TVars) => Promise<TData>) {
+export function useListMutation<TVars, TData = unknown>(mutationFn: (vars: TVars) => Promise<TData>) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn,
@@ -207,6 +214,14 @@ export function useCreateCitation() {
 export function useUpdateCitation() {
   return useListMutation(async ({ id, ...input }: CitationInput & { id: string }) => {
     const { data } = await apiClient.patch<Citation>(`/citations/${id}`, input)
+    return data
+  })
+}
+
+/** Detach a citation from its library record so its fields can be edited */
+export function useUnlinkCitation() {
+  return useListMutation(async (citationId: string) => {
+    const { data } = await apiClient.post<Citation>(`/citations/${citationId}/unlink`)
     return data
   })
 }

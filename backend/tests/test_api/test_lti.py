@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cli import _generate_tool_keys
+from app.config import settings
 from app.main import app
 from app.models.models import (
     CourseOffering,
@@ -137,7 +138,8 @@ async def test_login_redirects_to_platform_with_oidc_params(client: AsyncClient,
     assert query["scope"] == "openid"
     assert query["prompt"] == "none"
     assert query["client_id"] == CLIENT_ID
-    assert query["redirect_uri"] == "http://localhost:5173/lti/launch"
+    # PUBLIC_BASE_URL differs between environments (e.g. a tunnel while testing with a real LMS)
+    assert query["redirect_uri"] == f"{settings.public_base_url.rstrip('/')}/lti/launch"
     assert query["login_hint"] == "u1"
     assert query["state"] and query["nonce"] and query["state"] != query["nonce"]
 

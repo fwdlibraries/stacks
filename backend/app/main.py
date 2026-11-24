@@ -12,6 +12,7 @@ from app.routers import (
     files,
     health,
     imports,
+    ingest,
     lists,
     lti,
     orgs,
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(orgs.router,      prefix="/api/v1",           tags=["Organizations"])
     app.include_router(lists.router,     prefix="/api/v1",           tags=["Reading Lists"])
     app.include_router(citations.router, prefix="/api/v1",           tags=["Citations"])
+    app.include_router(ingest.router,    prefix="/api/v1",           tags=["Ingest"])
     app.include_router(imports.router,   prefix="/api/v1/citations", tags=["Import"])
     app.include_router(files.router,     prefix="/api/v1/files",     tags=["Files"])
     app.include_router(users.router,     prefix="/api/v1",           tags=["Users"])
