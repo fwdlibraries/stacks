@@ -15,9 +15,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── Dependencies layer ────────────────────────────────────────────────────────
 FROM base AS deps
 
+# Install only the dependency list, not the project itself: the app runs from
+# /app as `app.main`, and building the package here would need the full source.
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
+    python -c "import tomllib; print('\n'.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))" > /tmp/requirements.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.txt
 
 # ── Final image ───────────────────────────────────────────────────────────────
 FROM deps AS final

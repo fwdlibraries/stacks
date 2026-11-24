@@ -78,17 +78,19 @@ npm run generate-types
 
 ### Database Migrations
 
-Migrations run explicitly — they never run automatically on startup.
+Migrations run explicitly — they never run automatically on startup. Run these from the repo root:
 
 ```bash
+COMPOSE="docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml"
+
 # Apply all pending migrations
-docker compose exec app alembic upgrade head
+$COMPOSE exec app alembic upgrade head
 
 # Create a new migration after changing SQLAlchemy models
-docker compose exec app alembic revision --autogenerate -m "add widget table"
+$COMPOSE exec app alembic revision --autogenerate -m "add widget table"
 
 # Downgrade one step
-docker compose exec app alembic downgrade -1
+$COMPOSE exec app alembic downgrade -1
 ```
 
 ### Adding a New Import Handler
