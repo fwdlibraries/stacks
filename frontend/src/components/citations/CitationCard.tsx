@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Card, Badge, Button } from 'react-bootstrap'
 import { resolveCitationLink, getLinkLabel } from '@/lib/citationLink'
 import type { Citation } from '@/api/hooks/useLists'
@@ -17,6 +18,8 @@ interface CitationCardProps {
   onEdit?: (citation: Citation) => void
   onDelete?: (citationId: string) => void
   isDragging?: boolean
+  /** Editor view only: drag handle rendered at the card's left edge */
+  dragHandle?: ReactNode
 }
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
@@ -49,6 +52,7 @@ export function CitationCard({
   onEdit,
   onDelete,
   isDragging = false,
+  dragHandle,
 }: CitationCardProps) {
   const resolver = linkResolverBaseUrl ? { base_url: linkResolverBaseUrl } : null
   const link = resolveCitationLink(citation, resolver)
@@ -61,6 +65,7 @@ export function CitationCard({
     >
       <Card.Body>
         <div className="d-flex align-items-start justify-content-between gap-2">
+          {dragHandle && <div className="flex-shrink-0 ms-n2">{dragHandle}</div>}
           <div className="flex-grow-1">
             {/* Resource type badge */}
             <Badge

@@ -43,6 +43,7 @@ $card-border-color: $sand;
 $card-bg:           #fff;
 $card-cap-bg:       $parchment;
 $enable-shadows:    false;
+$enable-negative-margins: true; // ms-n2 etc. tuck drag handles into the gutter
 
 // ── Typography ───────────────────────────────────────────────────────────────
 $font-family-base:      "Libre Baskerville", Georgia, serif;
