@@ -1,12 +1,13 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Button, Container, Nav, Navbar } from 'react-bootstrap'
 import { SignOut } from '@phosphor-icons/react'
-import { useLogout } from '@/api/hooks/useAuth'
+import { useCurrentUser, useLogout } from '@/api/hooks/useAuth'
 
 /** Authenticated editor layout: top navbar + routed content. */
 export function AppShell() {
   const navigate = useNavigate()
   const logout = useLogout()
+  const { data: user } = useCurrentUser()
 
   const handleSignOut = () => {
     logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
@@ -27,6 +28,11 @@ export function AppShell() {
                 Reading lists
               </Nav.Link>
             </Nav>
+            {user && (
+              <span className="small text-body-secondary me-3">
+                {user.display_name} · {user.organization.name}
+              </span>
+            )}
             <Button
               variant="outline-secondary"
               size="sm"

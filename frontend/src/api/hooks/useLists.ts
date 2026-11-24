@@ -31,12 +31,16 @@ export interface ListSection {
   citations: Citation[]
 }
 
-export interface ReadingList {
+export interface ReadingListSummary {
   id: string
   title: string
   description?: string
   visibility: 'public' | 'institution' | 'unlisted'
   is_published: boolean
+  updated_at?: string
+}
+
+export interface ReadingList extends ReadingListSummary {
   sections: ListSection[]
 }
 
@@ -47,7 +51,7 @@ export function useReadingLists() {
   return useQuery({
     queryKey: ['lists'],
     queryFn: async () => {
-      const { data } = await apiClient.get<ReadingList[]>('/lists')
+      const { data } = await apiClient.get<ReadingListSummary[]>('/lists')
       return data
     },
   })

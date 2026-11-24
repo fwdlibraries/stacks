@@ -1,27 +1,47 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../client'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, type AuthTokens } from '@/stores/auth'
 
 export interface LoginCredentials {
-  username: string
+  email: string
   password: string
 }
 
-// Assumed response shape; POST /auth/local/login is still a stub on the backend.
-// Replace with the generated type once `npm run generate-types` covers it.
-interface LoginResponse {
-  access_token: string
-  refresh_token?: string
+interface LoginResponse extends AuthTokens {
+  token_type: 'bearer'
+  expires_in: number
+}
+
+export interface CurrentUser {
+  id: string
+  email: string
+  display_name: string
+  is_system_admin: boolean
+  must_change_password: boolean
+  organization: { id: string; name: string; slug: string }
 }
 
 export function useLogin() {
-  const setToken = useAuthStore((s) => s.setToken)
+  const setTokens = useAuthStore((s) => s.setTokens)
   return useMutation({
     mutationFn: async (credentials: LoginCredentials) => {
       const { data } = await apiClient.post<LoginResponse>('/auth/local/login', credentials)
       return data
     },
-    onSuccess: (data) => setToken(data.access_token),
+    onSuccess: (data) => setTokens(data),
+  })
+}
+
+export function useCurrentUser() {
+  const token = useAuthStore((s) => s.token)
+  return useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      const { data } = await apiClient.get<CurrentUser>('/auth/me')
+      return data
+    },
+    enabled: Boolean(token),
+    staleTime: 5 * 60_000,
   })
 }
 
