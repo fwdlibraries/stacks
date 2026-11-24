@@ -116,7 +116,7 @@ export function CitationCard({
                   variant="outline-secondary"
                   size="sm"
                   onClick={() => onEdit(citation)}
-                  aria-label="Edit citation"
+                  aria-label={`Edit ${citation.title}`}
                 >
                   Edit
                 </Button>
@@ -126,7 +126,7 @@ export function CitationCard({
                   variant="outline-danger"
                   size="sm"
                   onClick={() => onDelete(citation.id)}
-                  aria-label="Delete citation"
+                  aria-label={`Delete ${citation.title}`}
                 >
                   Delete
                 </Button>
