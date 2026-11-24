@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../client'
+import type { OrderPlan } from '@/lib/listOrder'
 
 // ── Types (will be auto-generated from OpenAPI spec via generate-types script) ──
 
@@ -216,30 +217,42 @@ export function useDeleteCitation() {
   })
 }
 
-export function useReorderSections(listId: string) {
+/**
+ * Apply a drag-and-drop reorder: update the cache immediately, send the change,
+ * roll back if the server rejects it, and re-sync with the server either way.
+ */
+export function useApplyOrder(listId: string) {
   const queryClient = useQueryClient()
+  const key = ['lists', listId, 'full']
   return useMutation({
-    mutationFn: async (sectionIds: string[]) => {
-      const { data } = await apiClient.post(`/lists/${listId}/sections/reorder`, { section_ids: sectionIds })
-      return data
-    },
-    onMutate: async (sectionIds) => {
-      // Optimistic update
-      await queryClient.cancelQueries({ queryKey: ['lists', listId, 'full'] })
-      const previous = queryClient.getQueryData(['lists', listId, 'full'])
-      queryClient.setQueryData(['lists', listId, 'full'], (old: ReadingList) => ({
-        ...old,
-        sections: sectionIds.map((id, i) => ({
-          ...old.sections.find((s) => s.id === id)!,
-          sort_order: i,
-        })),
-      }))
-      return { previous }
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(['lists', listId, 'full'], context.previous)
+    mutationFn: async ({ change }: OrderPlan) => {
+      switch (change.kind) {
+        case 'sections':
+          await apiClient.post(`/lists/${listId}/sections/reorder`, { section_ids: change.sectionIds })
+          break
+        case 'citations':
+          await apiClient.post(`/sections/${change.sectionId}/citations/reorder`, {
+            citation_ids: change.citationIds,
+          })
+          break
+        case 'move':
+          // The move appends to the target section; the reorder then places it
+          await apiClient.patch(`/citations/${change.citationId}`, { list_section_id: change.toSectionId })
+          await apiClient.post(`/sections/${change.toSectionId}/citations/reorder`, {
+            citation_ids: change.toCitationIds,
+          })
+          break
       }
     },
+    onMutate: async ({ next }: OrderPlan) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      const previous = queryClient.getQueryData<ReadingList>(key)
+      queryClient.setQueryData(key, next)
+      return { previous }
+    },
+    onError: (_error, _plan, context) => {
+      if (context?.previous) queryClient.setQueryData(key, context.previous)
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['lists'] }),
   })
 }

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Alert, Badge, Button, Spinner } from 'react-bootstrap'
 import { ListPlus, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
 import {
+  useApplyOrder,
   useCreateCitation,
   useCreateSection,
   useDeleteCitation,
@@ -22,6 +23,7 @@ import { ConfirmModal } from '@/components/common/ConfirmModal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ListDetailsModal } from '@/components/lists/ListDetailsModal'
 import { SectionFormModal } from '@/components/lists/SectionFormModal'
+import { ListDnd, SectionCitations, SortableCitation, SortableSection } from '@/components/lists/SortableList'
 
 type Dialog =
   | { kind: 'details' }
@@ -34,8 +36,8 @@ type Dialog =
 const VISIBILITY_LABELS = { public: 'Public', unlisted: 'Unlisted', institution: 'Organization only' }
 
 /**
- * Reading list editor. Drag-and-drop reordering (dnd-kit) and live collaboration
- * (lib/websocket.ts) will build on this view.
+ * Reading list editor. Sections and citations reorder by drag-and-drop (or the
+ * keyboard via their handles). Live collaboration (lib/websocket.ts) will build on this.
  */
 export default function ListEditorView() {
   const { listId = '' } = useParams<{ listId: string }>()
@@ -43,6 +45,7 @@ export default function ListEditorView() {
   const [dialog, setDialog] = useState<Dialog>(null)
 
   const setPublished = useSetPublished(listId)
+  const applyOrder = useApplyOrder(listId)
   const updateList = useUpdateList(listId)
   const createSection = useCreateSection(listId)
   const updateSection = useUpdateSection()
@@ -107,6 +110,11 @@ export default function ListEditorView() {
           </Button>
         </div>
       </header>
+      {applyOrder.isError && (
+        <Alert variant="danger" className="small mt-3" dismissible onClose={() => applyOrder.reset()}>
+          {apiErrorMessage(applyOrder.error, 'The new order could not be saved, so it was undone.')}
+        </Alert>
+      )}
       {setPublished.isError && (
         <Alert variant="danger" className="small mt-3">
           {apiErrorMessage(setPublished.error, 'The reading list could not be updated. Try again.')}
@@ -129,62 +137,82 @@ export default function ListEditorView() {
         </EmptyState>
       )}
 
-      {list.sections.map((section) => (
-        <section key={section.id} className="mb-5" aria-labelledby={`section-${section.id}`}>
-          <div className="d-flex align-items-start justify-content-between gap-2 mb-2">
-            <div>
-              <h2 id={`section-${section.id}`} className="h3 mb-1">
-                {section.title}
-              </h2>
-              {section.description && <p className="text-body-secondary small mb-0">{section.description}</p>}
-            </div>
-            <div className="d-flex gap-1 flex-shrink-0">
-              <Button
-                variant="link"
-                size="sm"
-                className="text-body-secondary"
-                onClick={() => open({ kind: 'section', section })}
-                aria-label={`Edit section ${section.title}`}
-              >
-                <PencilSimple aria-hidden="true" /> Edit
-              </Button>
-              {section.citations.length === 0 && (
+      <ListDnd list={list} onReorder={(plan) => applyOrder.mutate(plan)}>
+        {list.sections.map((section) => (
+          <SortableSection key={section.id} section={section}>
+            {(handle) => (
+              <section className="mb-5" aria-labelledby={`section-${section.id}`}>
+                <div className="d-flex align-items-start justify-content-between gap-2 mb-2">
+                  <div className="d-flex align-items-start gap-1">
+                    <div className="ms-n2">{handle}</div>
+                    <div>
+                      <h2 id={`section-${section.id}`} className="h3 mb-1">
+                        {section.title}
+                      </h2>
+                      {section.description && (
+                        <p className="text-body-secondary small mb-0">{section.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="d-flex gap-1 flex-shrink-0">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="text-body-secondary"
+                      onClick={() => open({ kind: 'section', section })}
+                      aria-label={`Edit section ${section.title}`}
+                    >
+                      <PencilSimple aria-hidden="true" /> Edit
+                    </Button>
+                    {section.citations.length === 0 && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="text-danger"
+                        onClick={() => open({ kind: 'deleteSection', section })}
+                        aria-label={`Delete section ${section.title}`}
+                      >
+                        <Trash aria-hidden="true" /> Delete
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <SectionCitations section={section}>
+                  {section.citations.length === 0 && (
+                    <p className="text-body-secondary small mb-2">
+                      No citations in this section. Add one, or drag one here.
+                    </p>
+                  )}
+                  {section.citations.map((citation) => (
+                    <SortableCitation key={citation.id} citation={citation} sectionId={section.id}>
+                      {(citationHandle, isDragging) => (
+                        <CitationCard
+                          citation={citation}
+                          showStaffNote
+                          isDragging={isDragging}
+                          dragHandle={citationHandle}
+                          onEdit={(c) => open({ kind: 'citation', section, citation: c })}
+                          onDelete={() => open({ kind: 'deleteCitation', citation })}
+                        />
+                      )}
+                    </SortableCitation>
+                  ))}
+                </SectionCitations>
+
                 <Button
-                  variant="link"
+                  variant="outline-primary"
                   size="sm"
-                  className="text-danger"
-                  onClick={() => open({ kind: 'deleteSection', section })}
-                  aria-label={`Delete section ${section.title}`}
+                  className="d-inline-flex align-items-center gap-1 mt-1"
+                  onClick={() => open({ kind: 'citation', section })}
                 >
-                  <Trash aria-hidden="true" /> Delete
+                  <Plus aria-hidden="true" /> Add citation
                 </Button>
-              )}
-            </div>
-          </div>
-
-          {section.citations.length === 0 && (
-            <p className="text-body-secondary small">No citations in this section.</p>
-          )}
-          {section.citations.map((citation) => (
-            <CitationCard
-              key={citation.id}
-              citation={citation}
-              showStaffNote
-              onEdit={(c) => open({ kind: 'citation', section, citation: c })}
-              onDelete={() => open({ kind: 'deleteCitation', citation })}
-            />
-          ))}
-
-          <Button
-            variant="outline-primary"
-            size="sm"
-            className="d-inline-flex align-items-center gap-1 mt-1"
-            onClick={() => open({ kind: 'citation', section })}
-          >
-            <Plus aria-hidden="true" /> Add citation
-          </Button>
-        </section>
-      ))}
+              </section>
+            )}
+          </SortableSection>
+        ))}
+      </ListDnd>
 
       {list.sections.length > 0 && (
         <Button
