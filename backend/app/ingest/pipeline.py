@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from app.ingest.candidate import Candidate, SourceError
 from app.ingest.identifiers import Identifier, detect
-from app.ingest.resolvers import BY_SYSTEM, CHAIN, ResolveContext
+from app.ingest.resolvers import BY_SYSTEM, CHAIN, ResolveContext, alma, primo
 
 MAX_IDENTIFIERS = 5
 
@@ -48,4 +48,33 @@ async def fetch(source_system: str, source_identifier: str, ctx: ResolveContext)
     resolver = BY_SYSTEM.get(source_system)
     if resolver is None:
         raise SourceError(source_system, "is not a source Stacks can import from")
-    return await resolver.fetch(source_identifier, ctx)
+    candidate = await resolver.fetch(source_identifier, ctx) if resolver.available(ctx) else None
+    if candidate is None and source_system == "alma" and primo.available(ctx):
+        # Not in the institution's Alma (e.g. a consortium Network Zone record):
+        # use Primo's copy, which is not kept in sync
+        candidate = await BY_SYSTEM["primo"].fetch(f"alma{source_identifier}", ctx)
+    return candidate
+
+
+async def search(text: str, ctx: ResolveContext, *, offset: int = 0, limit: int = 10) -> tuple[int, list[Candidate]]:
+    """Keyword search of the library's discovery system.
+
+    Results the institution's Alma actually holds stay `alma` (bound and synced when
+    added); other local records, such as consortium Network Zone ones, become
+    Primo records so nothing promises a sync Stacks can't do.
+    """
+    total, candidates = await primo.search_candidates(ctx, text, offset=offset, limit=limit)
+    alma_ids = [c.source_identifier for c in candidates if c.source_system == "alma"]
+    if not alma_ids:
+        return total, candidates
+    held: set[str] = set()
+    if "alma" in ctx.sources:
+        try:
+            held = await alma.held(alma_ids, ctx)
+        except SourceError:
+            held = set(alma_ids)  # can't tell: adding will fall back to Primo if needed
+    for candidate in candidates:
+        if candidate.source_system == "alma" and candidate.source_identifier not in held:
+            candidate.source_system = "primo"
+            candidate.source_identifier = f"alma{candidate.source_identifier}"
+    return total, candidates

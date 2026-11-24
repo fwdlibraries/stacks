@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { Alert, Badge, Button, Form, InputGroup, ListGroup, Spinner } from 'react-bootstrap'
 import { Books, MagnifyingGlass } from '@phosphor-icons/react'
-import { SOURCE_LABELS, useLookup, type LookupCandidate } from '@/api/hooks/useIngest'
+import { AVAILABILITY_LABELS, SOURCE_LABELS, useLookup, type LookupCandidate } from '@/api/hooks/useIngest'
 import { apiErrorMessage } from '@/lib/apiError'
 
 interface CitationLookupProps {
@@ -30,10 +30,7 @@ export function CitationLookup({ onAdd, isAdding, addError }: CitationLookupProp
   }
 
   return (
-    <section aria-labelledby="citation-lookup-heading" className="mb-4">
-      <h3 id="citation-lookup-heading" className="h6">
-        Look it up
-      </h3>
+    <section aria-label="Look up an identifier">
       <InputGroup>
         <Form.Control
           aria-label="DOI, ISBN or MMS ID"
@@ -96,7 +93,7 @@ export function CitationLookup({ onAdd, isAdding, addError }: CitationLookupProp
   )
 }
 
-function CandidateItem({
+export function CandidateItem({
   candidate,
   isAdding,
   onAdd,
@@ -110,6 +107,7 @@ function CandidateItem({
     .filter(Boolean)
     .join(' · ')
   const title = citation.title ?? 'Untitled record'
+  const journal = typeof citation.metadata.journal_name === 'string' ? citation.metadata.journal_name : null
 
   return (
     <ListGroup.Item className="d-flex align-items-start justify-content-between gap-3">
@@ -118,8 +116,14 @@ function CandidateItem({
           {candidate.authoritative && <Books aria-hidden="true" className="me-1" />}
           {SOURCE_LABELS[candidate.source_system] ?? candidate.source_system}
         </Badge>
+        {candidate.availability && (
+          <Badge bg="light" text="dark" className="me-2">
+            {AVAILABILITY_LABELS[candidate.availability]}
+          </Badge>
+        )}
         <strong>{title}</strong>
         {details && <div className="small text-body-secondary">{details}</div>}
+        {journal && <div className="small text-body-secondary fst-italic">{journal}</div>}
         {candidate.authoritative && (
           <div className="small text-body-secondary">Stays up to date with your library's catalogue.</div>
         )}

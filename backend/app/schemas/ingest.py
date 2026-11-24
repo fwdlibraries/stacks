@@ -43,6 +43,8 @@ class CandidateOut(BaseModel):
     match_method: str
     confidence: float
     authoritative: bool
+    # Search results: 'online' | 'in_library' | 'check_holdings' | 'citation_only'
+    availability: str | None = None
     citation: CandidateCitation
 
 
@@ -51,6 +53,25 @@ class LookupResponse(BaseModel):
     candidates: list[CandidateOut]
     # Sources that failed (unreachable, key rejected): shown, but not fatal
     warnings: list[str]
+
+
+class SearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=500)
+    offset: int = Field(default=0, ge=0, le=2000)
+    limit: int = Field(default=10, ge=1, le=25)
+
+
+class SearchResponse(BaseModel):
+    total: int
+    offset: int
+    candidates: list[CandidateOut]
+
+
+class IngestCapabilities(BaseModel):
+    """What the add-citation dialog can offer this organization."""
+
+    library_search: bool
 
 
 class CitationFromSource(BaseModel):

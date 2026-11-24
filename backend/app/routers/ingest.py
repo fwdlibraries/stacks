@@ -14,7 +14,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.ingest import pipeline
 from app.ingest.candidate import Candidate, SourceError
-from app.ingest.resolvers import BY_SYSTEM, ResolveContext
+from app.ingest.resolvers import BY_SYSTEM, ResolveContext, primo
 from app.ingest.sources import load_sources
 from app.models.models import Citation, ResourceType, User
 from app.schemas.ingest import (
@@ -22,8 +22,11 @@ from app.schemas.ingest import (
     CandidateOut,
     CitationFromSource,
     IdentifierOut,
+    IngestCapabilities,
     LookupRequest,
     LookupResponse,
+    SearchRequest,
+    SearchResponse,
 )
 from app.schemas.lists import StaffCitation
 from app.services import lists_service as svc
@@ -61,6 +64,7 @@ def _candidate_out(candidate: Candidate) -> CandidateOut:
         match_method=candidate.match_method,
         confidence=candidate.confidence,
         authoritative=candidate.authoritative,
+        availability=candidate.availability,
         citation=CandidateCitation.model_validate({k: v for k, v in draft.items() if v is not None}),
     )
 
@@ -106,6 +110,27 @@ async def lookup(body: LookupRequest, ctx: ResolveContext = Depends(resolve_cont
         candidates=[_candidate_out(c) for c in result.candidates],
         warnings=result.warnings,
     )
+
+
+@router.get("/ingest/capabilities", response_model=IngestCapabilities, summary="What citation sources are set up")
+async def capabilities(ctx: ResolveContext = Depends(resolve_context)):
+    return IngestCapabilities(library_search=primo.available(ctx))
+
+
+@router.post("/ingest/search", response_model=SearchResponse, summary="Search the library's discovery system")
+async def search(body: SearchRequest, ctx: ResolveContext = Depends(resolve_context)):
+    """Keyword search of the organization's Primo scope.
+
+    Catalogue results are `alma` candidates (added bound to the Alma record);
+    Central Discovery Index results, mostly articles, are `primo` candidates.
+    """
+    if not primo.available(ctx):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Library search isn't set up for your organization")
+    try:
+        total, candidates = await pipeline.search(ctx=ctx, text=body.query, offset=body.offset, limit=body.limit)
+    except SourceError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"{exc}. Try again, or look the item up by identifier.") from exc
+    return SearchResponse(total=total, offset=body.offset, candidates=[_candidate_out(c) for c in candidates])
 
 
 @router.post(

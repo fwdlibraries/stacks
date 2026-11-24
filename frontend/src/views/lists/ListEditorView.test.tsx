@@ -35,7 +35,9 @@ const LIST: ReadingList = {
 const routes = [{ path: '/lists/:listId', element: <ListEditorView /> }]
 
 beforeEach(() => {
-  vi.spyOn(apiClient, 'get').mockResolvedValue({ data: LIST })
+  vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) =>
+    url === '/ingest/capabilities' ? { data: { library_search: false } } : { data: LIST }
+  )
 })
 
 afterEach(() => vi.restoreAllMocks())
@@ -65,6 +67,7 @@ describe('ListEditorView', () => {
     fireEvent.click(within(week1).getByRole('button', { name: /Add citation/ }))
 
     const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Enter details' }))
     fireEvent.change(within(dialog).getByLabelText(/^Title/), { target: { value: 'The Historian’s Craft' } })
     fireEvent.change(within(dialog).getByLabelText(/^Authors/), { target: { value: 'Bloch, Marc' } })
     fireEvent.change(within(dialog).getByLabelText(/^Year/), { target: { value: '1953' } })
@@ -85,6 +88,7 @@ describe('ListEditorView', () => {
     const week1 = (await screen.findByRole('heading', { name: 'Week 1' })).closest('section')!
     fireEvent.click(within(week1).getByRole('button', { name: /Add citation/ }))
     const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Enter details' }))
     fireEvent.change(within(dialog).getByLabelText(/^URL/), { target: { value: 'javascript:alert(1)' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add citation' }))
 
@@ -182,5 +186,67 @@ describe('ListEditorView', () => {
     fireEvent.click(within(again).getByRole('button', { name: /unlink it from the catalogue/ }))
     await waitFor(() => expect(post).toHaveBeenCalledWith('/citations/c1/unlink'))
     await waitFor(() => expect(within(again).getByLabelText(/^Title/)).toBeEnabled())
+  })
+
+  it('searches the library, shows availability, and adds a result', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) =>
+      url === '/ingest/capabilities' ? { data: { library_search: true } } : { data: LIST }
+    )
+    const post = vi.spyOn(apiClient, 'post').mockImplementation(async (url: string) => {
+      if (url === '/ingest/search') {
+        return {
+          data: {
+            total: 2,
+            offset: 0,
+            candidates: [
+              {
+                source_system: 'primo',
+                source_identifier: 'cdi_crossref_primary_10_1016_x',
+                match_method: 'search',
+                confidence: 1,
+                authoritative: false,
+                availability: 'online',
+                citation: {
+                  title: 'Carbon pricing',
+                  author: ['Zakeri, Atefe'],
+                  editor: [],
+                  year: 2015,
+                  metadata: { journal_name: 'Energy policy' },
+                },
+              },
+            ],
+          },
+        }
+      }
+      return { data: {} }
+    })
+    renderRoutes(routes, '/lists/l1')
+
+    const week1 = (await screen.findByRole('heading', { name: 'Week 1' })).closest('section')!
+    fireEvent.click(within(week1).getByRole('button', { name: /Add citation/ }))
+    const dialog = await screen.findByRole('dialog')
+    // Library search is the default when it's set up; results have their own Add buttons
+    expect(await within(dialog).findByRole('tab', { name: 'Search the library', selected: true })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Add citation' })).not.toBeInTheDocument()
+
+    const box = within(dialog).getByRole('textbox', { name: 'Search the library' })
+    fireEvent.change(box, { target: { value: 'carbon pricing' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+
+    expect(await within(dialog).findByText('Online')).toBeInTheDocument()
+    expect(within(dialog).getByText('Energy policy')).toBeInTheDocument()
+    expect(post).toHaveBeenCalledWith('/ingest/search', { query: 'carbon pricing', offset: 0, limit: 10 })
+    fireEvent.click(within(dialog).getByLabelText('Required reading'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Carbon pricing' }))
+
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/sections/s2/citations/from-source', {
+        source_system: 'primo',
+        source_identifier: 'cdi_crossref_primary_10_1016_x',
+        is_required: false,
+        student_note: '',
+        staff_note: '',
+      })
+    )
   })
 })

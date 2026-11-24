@@ -8,6 +8,8 @@ interface FormModalProps {
   isPending?: boolean
   error?: string | null
   size?: 'lg'
+  /** Hide the submit button, e.g. while another action in the body adds the item */
+  hideSubmit?: boolean
   onSubmit: () => void
   onCancel: () => void
   children: ReactNode
@@ -21,6 +23,7 @@ export function FormModal({
   isPending = false,
   error,
   size,
+  hideSubmit = false,
   onSubmit,
   onCancel,
   children,
@@ -50,9 +53,11 @@ export function FormModal({
           <Button variant="outline-secondary" onClick={onCancel} disabled={isPending}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" disabled={isPending}>
-            {isPending ? 'Saving…' : submitLabel}
-          </Button>
+          {!hideSubmit && (
+            <Button type="submit" variant="primary" disabled={isPending}>
+              {isPending ? 'Saving…' : submitLabel}
+            </Button>
+          )}
         </Modal.Footer>
       </Form>
     </Modal>

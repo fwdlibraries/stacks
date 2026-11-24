@@ -23,7 +23,8 @@ def parse_marcxml(marcxml: str) -> pymarc.Record:
     return records[0]
 
 
-def _clean(value: str | None) -> str | None:
+def clean(value: str | None) -> str | None:
+    """Trim MARC/ISBD punctuation from the end of a value."""
     if not value:
         return None
     value = _TRAILING_PUNCT.sub("", value.strip())
@@ -34,7 +35,7 @@ def _clean(value: str | None) -> str | None:
 
 def _sub(record: pymarc.Record, tag: str, code: str) -> str | None:
     field = record.get(tag)
-    return _clean(field.get(code)) if field else None
+    return clean(field.get(code)) if field else None
 
 
 def _publication(record: pymarc.Record) -> pymarc.Field | None:
@@ -59,7 +60,7 @@ def title(record: pymarc.Record) -> str | None:
     f245 = record.get("245")
     if not f245:
         return None
-    main, subtitle = _clean(f245.get("a")), _clean(f245.get("b"))
+    main, subtitle = clean(f245.get("a")), clean(f245.get("b"))
     if main and subtitle:
         # "What is history? The …" rather than "What is history?: the …"
         return f"{main} {subtitle[0].upper()}{subtitle[1:]}" if main[-1] in "?!" else f"{main}: {subtitle}"
@@ -69,7 +70,7 @@ def title(record: pymarc.Record) -> str | None:
 def authors(record: pymarc.Record) -> list[str]:
     names: list[str] = []
     for tag in ("100", "110", "111"):
-        if (field := record.get(tag)) and (name := _clean(field.get("a"))):
+        if (field := record.get(tag)) and (name := clean(field.get("a"))):
             names.append(name)
             break
     for field in record.get_fields("700", "710"):
@@ -77,13 +78,13 @@ def authors(record: pymarc.Record) -> list[str]:
         # authors when the relator says so
         if field.tag == "710" and not _is_author(field):
             continue
-        if not _is_editor(field) and (name := _clean(field.get("a"))) and name not in names:
+        if not _is_editor(field) and (name := clean(field.get("a"))) and name not in names:
             names.append(name)
     return names
 
 
 def editors(record: pymarc.Record) -> list[str]:
-    return [name for f in record.get_fields("700") if _is_editor(f) and (name := _clean(f.get("a")))]
+    return [name for f in record.get_fields("700") if _is_editor(f) and (name := clean(f.get("a")))]
 
 
 def year(record: pymarc.Record) -> int | None:
@@ -136,8 +137,8 @@ def to_draft(record: pymarc.Record) -> CitationDraft:
         author=authors(record),
         editor=editors(record),
         year=year(record),
-        publisher=_clean(pub.get("b")) if pub else None,
-        place_of_publication=_clean(pub.get("a")) if pub else None,
+        publisher=clean(pub.get("b")) if pub else None,
+        place_of_publication=clean(pub.get("a")) if pub else None,
         edition=_sub(record, "250", "a"),
         isbn=isbn(record),
         issn=_sub(record, "022", "a"),
