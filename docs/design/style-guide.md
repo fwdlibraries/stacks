@@ -150,7 +150,7 @@ The frontend uses a modular scale based on a 1.25 ratio (Major Third) with a 16p
 
 ### UI Icons
 
-Use **Phosphor Icons** (the `phosphor-react` package). Phosphor is a flexible, consistent icon family with multiple weights (Thin, Light, Regular, Bold, Fill, Duotone). Default to **Regular** weight for most UI contexts; use **Bold** for primary actions; use **Duotone** for empty states.
+Use **Phosphor Icons** (the `@phosphor-icons/react` package, the maintained successor to `phosphor-react`). Phosphor is a flexible, consistent icon family with multiple weights (Thin, Light, Regular, Bold, Fill, Duotone). Default to **Regular** weight for most UI contexts; use **Bold** for primary actions; use **Duotone** for empty states.
 
 Do not mix Phosphor with other icon libraries. Do not use emoji as UI icons.
 

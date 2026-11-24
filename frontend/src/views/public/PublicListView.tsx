@@ -1,6 +1,5 @@
-import React from 'react'
 import { useParams } from 'react-router-dom'
-import { Container, Alert, Spinner, Badge } from 'react-bootstrap'
+import { Container, Alert, Spinner } from 'react-bootstrap'
 import { usePublicList } from '@/api/hooks/useLists'
 import { CitationCard } from '@/components/citations/CitationCard'
 

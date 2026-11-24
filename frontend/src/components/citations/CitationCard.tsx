@@ -1,4 +1,3 @@
-import React from 'react'
 import { Card, Badge, Button } from 'react-bootstrap'
 import { resolveCitationLink, getLinkLabel } from '@/lib/citationLink'
 import type { Citation } from '@/api/hooks/useLists'

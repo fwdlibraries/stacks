@@ -1,0 +1,110 @@
+// Stacks Bootstrap theme. Values come from docs/design/style-guide.md; keep them in sync.
+
+// ── Palette ──────────────────────────────────────────────────────────────────
+$ink-navy:   #2C3E5A;
+$parchment:  #F7F4EF;
+$warm-grey:  #8A7B68;
+$brass:      #B5843A;
+$slate:      #5C7A8C;
+$forest:     #4A6741;
+$active:     #5DBE7E;
+$deep-night: #1C2A3A;
+$sand:       #D6C9B0;
+$muted-red:  #9E3B32; // "Muted red" for the Uploaded File badge and errors; not specified in the guide
+
+// ── Bootstrap theme colours (see the Badges table in the style guide) ─────────────
+$primary:   $ink-navy;
+$secondary: $warm-grey;
+$success:   $forest;
+$info:      $slate;
+$warning:   $brass;
+$danger:    $muted-red;
+$dark:      $deep-night;
+
+$custom-theme-colors: (
+  "published": $active,
+);
+
+// ── Surfaces & borders ───────────────────────────────────────────────────────
+$body-bg:        $parchment;
+$body-color:     $ink-navy;
+$body-secondary-color: $warm-grey;
+$border-color:   $sand;
+$link-color:     $slate;
+$link-hover-color: $ink-navy;
+
+$border-radius:     4px;
+$border-radius-sm:  2px;
+$border-radius-lg:  4px;
+$border-radius-xl:  4px;
+
+// Borders over shadows: cards and panels get Sand borders, no shadows
+$card-border-color: $sand;
+$card-bg:           #fff;
+$card-cap-bg:       $parchment;
+$enable-shadows:    false;
+
+// ── Typography ───────────────────────────────────────────────────────────────
+$font-family-base:      "Libre Baskerville", Georgia, serif;
+$headings-font-family:  "Playfair Display", Georgia, serif;
+$headings-font-weight:  600;
+$headings-line-height:  1.3;
+$line-height-base:      1.7;
+
+// Major Third (1.25) scale with a 16px base
+$font-size-base: 1rem;      // 16px
+$font-size-sm:   0.8125rem; // 13px
+$h1-font-size:   1.9375rem; // 31px: 2xl
+$h2-font-size:   1.5625rem; // 25px: xl
+$h3-font-size:   1.25rem;   // 20px: lg
+$h4-font-size:   1rem;
+$h5-font-size:   1rem;
+$h6-font-size:   0.8125rem;
+$badge-font-size: 0.6875rem; // 11px: xs
+
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/variables-dark";
+
+$theme-colors: map-merge($theme-colors, $custom-theme-colors);
+
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+@import "bootstrap/scss/bootstrap";
+
+// ── Stacks-specific tokens & helpers ─────────────────────────────────────────
+:root {
+  --stacks-ink-navy: #{$ink-navy};
+  --stacks-parchment: #{$parchment};
+  --stacks-warm-grey: #{$warm-grey};
+  --stacks-brass: #{$brass};
+  --stacks-slate: #{$slate};
+  --stacks-forest: #{$forest};
+  --stacks-active: #{$active};
+  --stacks-deep-night: #{$deep-night};
+  --stacks-sand: #{$sand};
+  --stacks-dim: #3A5068;
+}
+
+// All-caps labels (tagline, captions)
+.text-caps {
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  font-size: $badge-font-size;
+}
+
+// Wordmark in the navbar
+.stacks-wordmark {
+  font-family: $headings-font-family;
+  font-weight: 600;
+  letter-spacing: -1px;
+  font-size: 1.5625rem;
+  line-height: 1;
+}
+
+// Required-field asterisk: Warm Grey, not red
+.required-mark {
+  color: $warm-grey;
+  margin-left: 0.125rem;
+}
