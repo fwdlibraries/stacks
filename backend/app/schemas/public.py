@@ -34,6 +34,9 @@ class PublicCitation(BaseModel):
     openurl: str | None = None
     link_resolver_url: str | None = None
     use_doi_for_linking: bool = True
+    # Built per request from the org's discovery settings (app/services/links.py), never stored
+    link_url: str | None = None
+    link_kind: str | None = None  # 'library_record' | 'full_text' | 'doi' | 'web'
 
     student_note: str | None = None
     # The ORM attribute is `metadata_` (SQLAlchemy reserves `metadata`)

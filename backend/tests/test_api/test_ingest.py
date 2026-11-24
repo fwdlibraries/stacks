@@ -229,3 +229,12 @@ async def test_search(client, setup, db_session):
     )
     assert resp.status_code == 201
     assert (resp.json()["is_bound"], resp.json()["doi"]) == (False, "10.1016/j.enpol.2007.02.016")
+
+
+async def test_staff_list_includes_live_links(client, setup):
+    mine, _, _ = setup
+    citation = await add_bound(client, mine)
+    # "mine" has no Primo source, so the bound record has no library link; its ISBN has no resolver either
+    full = (await client.get(f"/api/v1/lists/{mine.list.id}/full")).json()
+    [added] = [c for s in full["sections"] for c in s["citations"] if c["id"] == citation["id"]]
+    assert (added["link_url"], added["link_kind"]) == (None, None)

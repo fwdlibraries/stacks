@@ -34,6 +34,9 @@ export interface Citation {
   openurl?: string | null
   link_resolver_url?: string | null
   use_doi_for_linking: boolean
+  /** Built per request from the library's discovery settings; never stored */
+  link_url?: string | null
+  link_kind?: 'library_record' | 'full_text' | 'doi' | 'web' | null
   student_note?: string | null
   /** Only returned to staff; never present on public list responses */
   staff_note?: string | null

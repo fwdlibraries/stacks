@@ -16,6 +16,7 @@ from app.models.models import (
     ReadingList,
 )
 from app.schemas.public import PublicReadingList
+from app.services import links
 
 router = APIRouter()
 
@@ -96,4 +97,6 @@ async def get_public_list(
 
     # Lists rarely change mid-term; a short shared cache absorbs class-wide traffic spikes
     response.headers["Cache-Control"] = "public, max-age=60"
+    org_id = await db.scalar(select(Organization.id).where(Organization.slug == org_slug))
+    links.annotate(reading_list, await links.load_link_settings(db, org_id))
     return PublicReadingList.model_validate(reading_list)

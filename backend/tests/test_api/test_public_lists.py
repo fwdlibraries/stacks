@@ -118,3 +118,40 @@ async def test_unknown_org_course_or_term_404s(client: AsyncClient, db_session: 
     await db_session.commit()
 
     assert (await client.get(f"/api/v1/public/lists/{path}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_links_follow_the_current_discovery_settings(client: AsyncClient, db_session: AsyncSession):
+    from sqlalchemy import select
+
+    from app.models.models import LibrarySource
+
+    course, _ = await make_course(db_session)
+    reading_list = make_list(course, is_published=True, visibility="public")
+    citation = reading_list.sections[0].citations[0]
+    citation.source_system, citation.source_identifier = "alma", "991234567890123"
+    db_session.add(reading_list)
+    await db_session.commit()
+
+    # No discovery system configured: no library link for a catalogue record
+    resp = await client.get(URL)
+    assert resp.json()["sections"][0]["citations"][0]["link_url"] is None
+
+    org_id = await db_session.scalar(select(Organization.id).where(Organization.slug == "test-org"))
+    source = LibrarySource(
+        organization_id=org_id,
+        kind="primo",
+        config={"region": "na", "vid": "01TEST_INST:NDE", "discovery_url": "https://test.primo.exlibrisgroup.com"},
+    )
+    db_session.add(source)
+    await db_session.commit()
+
+    linked = (await client.get(URL)).json()["sections"][0]["citations"][0]
+    assert linked["link_kind"] == "library_record"
+    assert linked["link_url"].startswith("https://test.primo.exlibrisgroup.com/discovery/fulldisplay?docid=alma991234567890123")
+
+    # Nothing is stored: changing the discovery settings changes every link at once
+    source.config = {**source.config, "discovery_url": "https://new.primo.exlibrisgroup.com"}
+    await db_session.commit()
+    moved = (await client.get(URL)).json()["sections"][0]["citations"][0]
+    assert moved["link_url"].startswith("https://new.primo.exlibrisgroup.com/")
