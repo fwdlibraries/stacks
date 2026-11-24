@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings
 from typing import Optional
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -40,6 +42,16 @@ class Settings(BaseSettings):
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
     email_from: str = "noreply@example.com"
+
+    @model_validator(mode="after")
+    def _require_secret_key(self) -> "Settings":
+        # Tokens are signed with SECRET_KEY: refuse to start with an empty or
+        # placeholder key outside debug mode
+        if not self.secret_key.strip():
+            raise ValueError("SECRET_KEY must be set (see .env.example)")
+        if not self.debug and self.secret_key == "changeme-in-production":
+            raise ValueError("SECRET_KEY is still the placeholder; set a real value")
+        return self
 
     class Config:
         env_file = ".env"

@@ -10,7 +10,7 @@ export default function LoginView() {
   const location = useLocation()
   const token = useAuthStore((s) => s.token)
   const login = useLogin()
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
   const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/lists'
@@ -21,12 +21,12 @@ export default function LoginView() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    login.mutate({ username, password }, { onSuccess: () => navigate(from, { replace: true }) })
+    login.mutate({ email, password }, { onSuccess: () => navigate(from, { replace: true }) })
   }
 
   const errorMessage = login.isError
     ? isAxiosError(login.error) && login.error.response?.status === 401
-      ? 'Incorrect username or password.'
+      ? 'Incorrect email or password.'
       : 'Sign-in is unavailable right now. Try again in a few minutes.'
     : null
 
@@ -54,15 +54,16 @@ export default function LoginView() {
           )}
 
           <Form onSubmit={handleSubmit} noValidate>
-            <Form.Group className="mb-3" controlId="login-username">
+            <Form.Group className="mb-3" controlId="login-email">
               <Form.Label>
-                Username<span className="required-mark" aria-hidden="true">*</span>
+                Email<span className="required-mark" aria-hidden="true">*</span>
               </Form.Label>
               <Form.Control
+                type="email"
                 autoComplete="username"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </Form.Group>
             <Form.Group className="mb-4" controlId="login-password">
@@ -78,7 +79,7 @@ export default function LoginView() {
               />
             </Form.Group>
             <div className="d-grid d-md-block">
-              <Button type="submit" variant="primary" disabled={login.isPending || !username || !password}>
+              <Button type="submit" variant="primary" disabled={login.isPending || !email || !password}>
                 {login.isPending ? 'Signing in…' : 'Sign in'}
               </Button>
             </div>
