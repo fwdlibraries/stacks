@@ -15,6 +15,8 @@ ALMA_MARC = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <datafield tag="264" ind1=" " ind2="1"><subfield code="a">New York :</subfield><subfield code="b">Vintage Books,</subfield><subfield code="c">2017.</subfield></datafield>
   <datafield tag="700" ind1="1" ind2=" "><subfield code="a">Davies, R. W.,</subfield><subfield code="e">editor.</subfield></datafield>
   <datafield tag="700" ind1="1" ind2=" "><subfield code="a">Evans, Richard J.,</subfield><subfield code="e">writer of introduction.</subfield></datafield>
+  <datafield tag="710" ind1="2" ind2=" "><subfield code="a">University of Cambridge.</subfield></datafield>
+  <datafield tag="710" ind1="2" ind2=" "><subfield code="a">History Workshop Collective,</subfield><subfield code="e">author.</subfield></datafield>
 </record>"""
 
 ALMA_EBOOK_MARC = """<record xmlns="http://www.loc.gov/MARC21/slim">
@@ -26,6 +28,14 @@ ALMA_EBOOK_MARC = """<record xmlns="http://www.loc.gov/MARC21/slim">
 
 def alma_bib(mms_id: str, marc: str = ALMA_MARC) -> dict:
     return {"mms_id": mms_id, "record_format": "marc21", "suppress_from_publishing": "false", "anies": [marc]}
+
+
+def cdi_doc(source_record_id: str) -> dict:
+    """A Central Discovery Index record: numeric sourcerecordid, but not an Alma record."""
+    return {
+        "context": "PC",
+        "pnx": {"control": {"recordid": [f"cdi_proquest_{source_record_id}"], "sourcerecordid": [source_record_id]}},
+    }
 
 
 def primo_doc(mms_id: str, context: str = "L") -> dict:

@@ -35,11 +35,12 @@ async def search(ctx: ResolveContext, query: str, *, limit: int = 10, local_only
 
 
 def mms_id(doc: dict) -> str | None:
-    """The Alma MMS ID behind a local Primo record, if it is one."""
+    """The Alma MMS ID behind a local Primo record; None for CDI and other non-Alma records.
+
+    CDI records also carry numeric `sourcerecordid`s (e.g. a ProQuest ID), so the
+    record must be an Alma one: recordid "alma<MMS ID>".
+    """
     control = (doc.get("pnx") or {}).get("control") or {}
-    for value in control.get("sourcerecordid") or []:
-        if value.isdigit():
-            return value
     for value in control.get("recordid") or []:
         if value.startswith("alma") and value[4:].isdigit():
             return value[4:]

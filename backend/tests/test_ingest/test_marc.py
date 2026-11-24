@@ -9,8 +9,9 @@ def test_alma_record_to_draft():
     draft = marc.to_draft(marc.parse_marcxml(ALMA_MARC))
     assert draft.title == "What is history? The George Macaulay Trevelyan lectures"
     assert draft.resource_type == "book"
-    # Editors are listed separately, not as authors; initials keep their periods
-    assert draft.author == ["Carr, Edward Hallett", "Evans, Richard J."]
+    # Editors are listed separately, not as authors; initials keep their periods.
+    # Corporate bodies count only when the relator says author (not sponsors, producers)
+    assert draft.author == ["Carr, Edward Hallett", "Evans, Richard J.", "History Workshop Collective"]
     assert draft.editor == ["Davies, R. W."]
     # The publication 264 (ind2=1) wins over the copyright one
     assert (draft.year, draft.publisher, draft.place_of_publication) == (2017, "Vintage Books", "New York")

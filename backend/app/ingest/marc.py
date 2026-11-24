@@ -50,6 +50,11 @@ def _is_editor(field: pymarc.Field) -> bool:
     return "editor" in relators or "ed." in relators or "edt" in relators
 
 
+def _is_author(field: pymarc.Field) -> bool:
+    relators = " ".join(field.get_subfields("e", "4")).lower()
+    return "author" in relators or "aut" in relators.split() or "creator" in relators or "cre" in relators.split()
+
+
 def title(record: pymarc.Record) -> str | None:
     f245 = record.get("245")
     if not f245:
@@ -68,6 +73,10 @@ def authors(record: pymarc.Record) -> list[str]:
             names.append(name)
             break
     for field in record.get_fields("700", "710"):
+        # 710s are usually sponsors, producers or issuing bodies: only count them as
+        # authors when the relator says so
+        if field.tag == "710" and not _is_author(field):
+            continue
         if not _is_editor(field) and (name := _clean(field.get("a"))) and name not in names:
             names.append(name)
     return names
