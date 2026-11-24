@@ -40,3 +40,8 @@ services:
   redis:
     ports:
       - "${REDIS_HOST_PORT:-6379}:6379"
+
+  # The TLS edge proxy isn't needed in dev (Vite proxies /api and /lti) and
+  # can't start without deploy/nginx/certs/. Opt in with --profile proxy.
+  nginx:
+    profiles: ["proxy"]
