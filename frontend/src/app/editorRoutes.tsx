@@ -7,6 +7,10 @@ import ListsIndexView from '@/views/lists/ListsIndexView'
 import ListEditorView from '@/views/lists/ListEditorView'
 import NotFoundView from '@/views/errors/NotFoundView'
 import ConnectExtensionView from '@/views/extension/ConnectExtensionView'
+import AdminLayout from '@/views/admin/AdminLayout'
+import OrganizationView from '@/views/admin/OrganizationView'
+import ConnectionsView from '@/views/admin/ConnectionsView'
+import LinkResolutionView from '@/views/admin/LinkResolutionView'
 
 /** Routes for the editor SPA (index.html). Student URLs under /public/ use public.html. */
 export const editorRoutes: RouteObject[] = [
@@ -24,6 +28,15 @@ export const editorRoutes: RouteObject[] = [
       { path: 'lists', element: <ListsIndexView /> },
       { path: 'lists/:listId', element: <ListEditorView /> },
       { path: 'extension/connect', element: <ConnectExtensionView /> },
+      {
+        path: 'admin',
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <OrganizationView /> },
+          { path: 'connections', element: <ConnectionsView /> },
+          { path: 'links', element: <LinkResolutionView /> },
+        ],
+      },
     ],
   },
   {

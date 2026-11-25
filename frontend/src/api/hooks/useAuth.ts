@@ -19,6 +19,13 @@ export interface CurrentUser {
   is_system_admin: boolean
   must_change_password: boolean
   organization: { id: string; name: string; slug: string }
+  /** What the user may administer, from their roles */
+  can?: {
+    manage_settings: boolean
+    manage_people: boolean
+    manage_courses: boolean
+    view_reports: boolean
+  }
 }
 
 export function useLogin() {
