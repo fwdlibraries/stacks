@@ -46,10 +46,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    // Vite rejects unknown Host headers (DNS-rebinding protection). Allow Cloudflare
-    // quick tunnels, used to test LTI launches from a real LMS against the dev stack
-    // (their hostname changes on every start), plus any extra hosts listed in
-    // VITE_ALLOWED_HOSTS (comma-separated).
+    // Vite rejects unknown Host headers (DNS-rebinding protection). Allow the dev
+    // tunnel's hostname, set in VITE_ALLOWED_HOSTS (comma-separated; see the tunnel
+    // service in deploy/docker-compose.dev.yml), plus Cloudflare quick tunnels.
     allowedHosts: [
       '.trycloudflare.com',
       ...(process.env.VITE_ALLOWED_HOSTS?.split(',').map((h) => h.trim()).filter(Boolean) ?? []),

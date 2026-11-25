@@ -31,6 +31,8 @@ services:
     command: npm run dev -- --host
     environment:
       VITE_API_PROXY_TARGET: http://app:8000
+      # Extra hostnames the dev server answers to, e.g. the tunnel's (comma-separated)
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     volumes:
       - ../frontend:/app
       - /app/node_modules
@@ -49,3 +51,23 @@ services:
   # can't start without deploy/nginx/certs/. Opt in with --profile proxy.
   nginx:
     profiles: ["proxy"]
+
+  # Cloudflare Tunnel: serves the dev stack at a fixed public hostname, for testing
+  # LTI launches from a real LMS and the browser extension. Opt-in:
+  #   1. Create a tunnel in Cloudflare Zero Trust (Networks → Tunnels), with a
+  #      public hostname whose service is http://frontend:5173
+  #   2. Put its token in .env as CLOUDFLARE_TUNNEL_TOKEN (and the hostname in
+  #      VITE_ALLOWED_HOSTS and PUBLIC_BASE_URL)
+  #   3. docker compose ... --profile tunnel up -d tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      # Read from the environment, so the token never appears in `ps` or compose output
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    networks:
+      - stacks
