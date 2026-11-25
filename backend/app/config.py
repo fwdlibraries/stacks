@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
     algorithm: str = "HS256"
+    # Failed password sign-ins allowed per account before it's paused, and for how
+    # long (the pause starts at the first failure). Slows password guessing.
+    login_max_failures: int = 10
+    login_lockout_minutes: int = 15
 
     # LTI
     lti_private_key_storage: str = "database"  # 'database' | 'aws_secrets'

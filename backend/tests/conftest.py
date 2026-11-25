@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database import Base, get_db
 from app.main import app
+from app.services.ephemeral import MemoryStore, get_ephemeral_store
 
 # Override to point at the compose database, e.g. postgresql+asyncpg://stacks:<pw>@db:5432/stacks_test
 TEST_DATABASE_URL = os.environ.get(
@@ -31,6 +32,9 @@ async def client(db_session: AsyncSession):
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    # A fresh in-memory store per test (login attempt counters, LTI state, link cache)
+    store = MemoryStore()
+    app.dependency_overrides[get_ephemeral_store] = lambda: store
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()

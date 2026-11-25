@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 from datetime import UTC, datetime
 
@@ -32,15 +33,40 @@ def _issue_tokens(user: User) -> TokenResponse:
     )
 
 
+def _failures_key(email: str) -> str:
+    # Hashed: no email addresses in Redis keys
+    return "login-failures:" + hashlib.sha256(email.strip().lower().encode()).hexdigest()[:32]
+
+
 @router.post("/local/login", response_model=TokenResponse, summary="Local email/password login")
-async def local_login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Authenticate with email and password. Returns access + refresh tokens."""
+async def local_login(
+    body: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+    store: EphemeralStore = Depends(get_ephemeral_store),
+):
+    """Authenticate with email and password. Returns access + refresh tokens.
+
+    After LOGIN_MAX_FAILURES failed attempts for an email address, sign-in for it
+    is paused (429) until LOGIN_LOCKOUT_MINUTES after the first failure. This is
+    per account, whatever the IP; the proxy in front also limits per IP. Unknown
+    addresses are counted the same way, so responses don't reveal which exist.
+    """
+    key = _failures_key(body.email)
+    window = settings.login_lockout_minutes * 60
+    if await store.count(key) >= settings.login_max_failures:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed sign-in attempts. Try again in {settings.login_lockout_minutes} minutes.",
+            headers={"Retry-After": str(window)},
+        )
     user = await AuthService.authenticate(body.email, body.password, db)
     if user is None:
+        await store.incr(key, window)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+    await store.reset(key)
     user.last_login_at = datetime.now(UTC)
     return _issue_tokens(user)
 
