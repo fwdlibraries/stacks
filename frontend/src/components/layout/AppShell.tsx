@@ -27,6 +27,11 @@ export function AppShell() {
               <Nav.Link as={NavLink} to="/lists">
                 Reading lists
               </Nav.Link>
+              {user?.can?.manage_settings && (
+                <Nav.Link as={NavLink} to="/admin">
+                  Administration
+                </Nav.Link>
+              )}
             </Nav>
             {user && (
               <span className="small text-body-secondary me-3">

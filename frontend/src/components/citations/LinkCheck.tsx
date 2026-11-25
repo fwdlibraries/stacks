@@ -28,10 +28,39 @@ function summary(result: LinkCheckResult): string {
   return `Students go straight to ${result.detail ? `${result.detail} ` : 'the resource '}(via ${via}).`
 }
 
+/** Where a link goes and what each resolver step found (Check link, Try it) */
+export function LinkTrace({ result }: { result: LinkCheckResult }) {
+  return (
+    <div className="small mt-2" aria-live="polite">
+      {result.retracted && (
+        <Alert variant="warning" className="small d-flex gap-2 align-items-start py-2">
+          <Warning aria-hidden="true" size={18} className="flex-shrink-0" />
+          This article has been retracted. Students are shown the retraction notice.
+        </Alert>
+      )}
+      <p className="mb-1">
+        {summary(result)}{' '}
+        {result.url && (
+          <a href={result.url} target="_blank" rel="noopener noreferrer">
+            Open
+          </a>
+        )}
+      </p>
+      <ol className="text-body-secondary mb-0 ps-3">
+        {result.steps.map((step) => (
+          <li key={step.step}>
+            {STEP_LABELS[step.step] ?? step.step}: {OUTCOME_LABELS[step.outcome]}
+            {step.outcome === 'found' && step.step !== 'fallback' && step.detail ? ` (${step.detail})` : ''}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 /** "Where does this link go?" for the citation editor */
 export function LinkCheck({ citationId }: { citationId: string }) {
   const check = useLinkCheck()
-  const result = check.data
 
   return (
     <section aria-label="Link check" className="mb-3">
@@ -55,32 +84,7 @@ export function LinkCheck({ citationId }: { citationId: string }) {
           {apiErrorMessage(check.error, 'The link could not be checked.')}
         </Alert>
       )}
-      {result && (
-        <div className="small mt-2" aria-live="polite">
-          {result.retracted && (
-            <Alert variant="warning" className="small d-flex gap-2 align-items-start py-2">
-              <Warning aria-hidden="true" size={18} className="flex-shrink-0" />
-              This article has been retracted. Students are shown the retraction notice.
-            </Alert>
-          )}
-          <p className="mb-1">
-            {summary(result)}{' '}
-            {result.url && (
-              <a href={result.url} target="_blank" rel="noopener noreferrer">
-                Open
-              </a>
-            )}
-          </p>
-          <ol className="text-body-secondary mb-0 ps-3">
-            {result.steps.map((step) => (
-              <li key={step.step}>
-                {STEP_LABELS[step.step] ?? step.step}: {OUTCOME_LABELS[step.outcome]}
-                {step.outcome === 'found' && step.step !== 'fallback' && step.detail ? ` (${step.detail})` : ''}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
+      {check.data && <LinkTrace result={check.data} />}
     </section>
   )
 }

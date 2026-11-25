@@ -12,6 +12,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.models import User
 from app.schemas.auth import (
+    Capabilities,
     CurrentUser,
     LoginRequest,
     LtiCodeExchange,
@@ -20,6 +21,7 @@ from app.schemas.auth import (
     TokenResponse,
 )
 from app.services import tenancy
+from app.services.access import load_grants
 from app.services.auth_service import AuthService
 from app.services.ephemeral import EphemeralStore, get_ephemeral_store
 
@@ -87,10 +89,16 @@ async def logout() -> Response:
 
 @router.get("/me", response_model=CurrentUser, summary="Current user")
 async def get_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Return the current authenticated user."""
-    return await db.scalar(
-        select(User).where(User.id == current_user.id).options(selectinload(User.organization))
+    """Return the current authenticated user, and what they may administer."""
+    user = await db.scalar(select(User).where(User.id == current_user.id).options(selectinload(User.organization)))
+    grants = await load_grants(db, current_user)
+    user.can = Capabilities(
+        manage_settings=grants.organization_wide("settings.manage"),
+        manage_people=grants.anywhere("people.manage"),
+        manage_courses=grants.anywhere("courses.manage"),
+        view_reports=grants.anywhere("reports.view"),
     )
+    return user
 
 
 @router.post("/token/refresh", response_model=TokenResponse, summary="Refresh access token")
