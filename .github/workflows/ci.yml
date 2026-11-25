@@ -91,6 +91,28 @@ jobs:
       - run: npx vitest run
       - run: npm run build
 
+  extension:
+    name: Browser extension (tests, Firefox lint)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run package
+      # Mozilla's validator: manifest, permissions and API use (also catches most Chrome issues)
+      - run: npx --yes web-ext@8 lint --source-dir dist/stacks-extension --warnings-as-errors
+
   images:
     name: Docker images build
     runs-on: ubuntu-latest

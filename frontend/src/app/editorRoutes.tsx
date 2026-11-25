@@ -6,6 +6,7 @@ import LaunchView from '@/views/auth/LaunchView'
 import ListsIndexView from '@/views/lists/ListsIndexView'
 import ListEditorView from '@/views/lists/ListEditorView'
 import NotFoundView from '@/views/errors/NotFoundView'
+import ConnectExtensionView from '@/views/extension/ConnectExtensionView'
 
 /** Routes for the editor SPA (index.html). Student URLs under /public/ use public.html. */
 export const editorRoutes: RouteObject[] = [
@@ -22,6 +23,7 @@ export const editorRoutes: RouteObject[] = [
       { index: true, element: <Navigate to="/lists" replace /> },
       { path: 'lists', element: <ListsIndexView /> },
       { path: 'lists/:listId', element: <ListEditorView /> },
+      { path: 'extension/connect', element: <ConnectExtensionView /> },
     ],
   },
   {

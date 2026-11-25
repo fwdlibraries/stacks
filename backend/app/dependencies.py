@@ -12,13 +12,33 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ):
-    """Resolve a Bearer token to an active User."""
+    """Resolve a Bearer token (a session JWT) to an active User."""
+    return await _resolve_user(credentials, db, token_scope=None)
+
+
+async def get_extension_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    db: AsyncSession = Depends(get_db),
+):
+    """Like get_current_user, but also accepts browser-extension tokens.
+
+    Use only on the endpoints the extension needs (listing lists, finding and
+    adding citations); everything else stays session-only.
+    """
+    from app.services.api_tokens import EXTENSION_SCOPE
+    return await _resolve_user(credentials, db, token_scope=EXTENSION_SCOPE)
+
+
+async def _resolve_user(credentials, db: AsyncSession, token_scope: str | None):
+    from app.services import api_tokens
     from app.services.auth_service import AuthService
-    user = (
-        await AuthService.get_user_from_token(credentials.credentials, db)
-        if credentials is not None
-        else None
-    )
+    user = None
+    if credentials is not None:
+        value = credentials.credentials
+        if api_tokens.is_token(value):
+            user = await api_tokens.user_for(db, value, token_scope) if token_scope else None
+        else:
+            user = await AuthService.get_user_from_token(value, db)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

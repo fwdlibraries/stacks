@@ -1,0 +1,43 @@
+:root {
+  --navy: #2b3a5c;
+  --gold: #b8893a;
+  --green: #4a6b3e;
+  --line: #d8d4cc;
+  --muted: #6b6760;
+  --danger: #a33a2c;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #222;
+}
+body { width: 380px; margin: 0; background: #faf8f4; }
+header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--navy); color: #fff; }
+header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+main { padding: 12px 14px; }
+footer { padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+footer:empty { display: none; }
+h2 { font-size: 13px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+label { display: block; font-weight: 600; margin: 10px 0 4px; }
+input[type="text"], input[type="url"], select, textarea {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; background: #fff;
+}
+textarea { resize: vertical; min-height: 44px; }
+button {
+  font: inherit; padding: 7px 14px; border-radius: 4px; border: 1px solid var(--navy);
+  background: var(--navy); color: #fff; cursor: pointer;
+}
+button.secondary { background: #fff; color: var(--navy); }
+button.link { background: none; border: none; color: var(--navy); padding: 0; text-decoration: underline; }
+button:disabled { opacity: .6; cursor: default; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.options { display: flex; flex-direction: column; gap: 6px; }
+.option { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; font-weight: normal; margin: 0; }
+.option input { margin-top: 3px; }
+.option .title { font-weight: 600; }
+.option .meta { font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px; background: #ece8df; margin-right: 4px; }
+.badge.library { background: var(--navy); color: #fff; }
+.badge.good { background: var(--green); color: #fff; }
+.check { display: flex; gap: 6px; align-items: center; font-weight: normal; }
+.success { padding: 10px; background: #e8efe4; border-radius: 4px; }

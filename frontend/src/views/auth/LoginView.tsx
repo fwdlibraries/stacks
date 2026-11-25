@@ -13,7 +13,9 @@ export default function LoginView() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
-  const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/lists'
+  // Keep the query too: e.g. /extension/connect?return=… must survive signing in
+  const origin = (location.state as { from?: Location } | null)?.from
+  const from = origin ? `${origin.pathname}${origin.search}` : '/lists'
 
   if (token) {
     return <Navigate to={from} replace />
