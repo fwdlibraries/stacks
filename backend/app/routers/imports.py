@@ -131,8 +131,8 @@ async def start_import(
 
     Poll GET /imports/{id} until `status` is `awaiting_review`.
     """
-    reading_list = await svc.get_list(db, current_user, list_id)
-    section = await svc.get_section(db, current_user, body.section_id)
+    reading_list = await svc.get_list(db, current_user, list_id, need="lists.edit")
+    section = await svc.get_section(db, current_user, body.section_id, need="lists.edit")
     if section.reading_list_id != reading_list.id:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "That section isn't in this reading list")
     try:
@@ -154,6 +154,7 @@ async def get_import(
     db: AsyncSession = Depends(get_db),
 ):
     job = await _job(db, current_user, job_id)
+    await svc.require(db, current_user, uuid.UUID(job.payload["reading_list_id"]), "lists.view", "Import")
     return await _job_out(db, job, with_items=items)
 
 
@@ -187,7 +188,7 @@ async def add_import(
     job = await _job(db, current_user, job_id)
     if job.status != "awaiting_review":
         raise HTTPException(status.HTTP_409_CONFLICT, f"This import can't be added now (it's {job.status.replace('_', ' ')})")
-    section = await svc.get_section(db, current_user, uuid.UUID(job.payload["section_id"]))
+    section = await svc.get_section(db, current_user, uuid.UUID(job.payload["section_id"]), need="lists.edit")
     choices = {c.id: (c.choice, c.candidate_index) for c in body.items}
     report = await bulk.add_items(db, current_user, job, section, choices, ctx)
     return AddResponse(added=report.added, skipped=report.skipped, failed=report.failed)

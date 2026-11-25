@@ -21,8 +21,8 @@ from app.services import lists_service as svc
 
 router = APIRouter()
 
-# Access is any active user in the list's organization; per-role permissions
-# (require_permission) come later. Creating lists happens via LTI launch (TODO).
+# Access comes from the user's roles and their scopes (app/services/access.py);
+# lists_service checks them on every lookup. Lists are created by LTI launches (for now).
 
 
 # ── Reading lists ────────────────────────────────────────────────────────────
@@ -33,8 +33,11 @@ async def list_reading_lists(
     db: AsyncSession = Depends(get_db),
 ):
     """Reading lists in the current user's organization, most recently updated first."""
-    result = await db.scalars(svc.org_lists_query(current_user).order_by(ReadingList.updated_at.desc()))
-    return result.all()
+    lists = (await db.scalars((await svc.visible_lists_query(db, current_user)).order_by(ReadingList.updated_at.desc()))).all()
+    for reading_list in lists:
+        for flag, value in (await svc.permissions_on(db, current_user, reading_list.id)).items():
+            setattr(reading_list, flag, value)
+    return lists
 
 
 @router.get(
@@ -49,6 +52,8 @@ async def get_reading_list_full(
 ):
     """Compound document: the list, its sections and their citations, including staff notes."""
     reading_list = await svc.get_list(db, current_user, list_id, full=True)
+    for flag, value in (await svc.permissions_on(db, current_user, list_id)).items():
+        setattr(reading_list, flag, value)
     return links.annotate(reading_list, await links.load_link_settings(db, current_user.organization_id))
 
 
@@ -59,8 +64,13 @@ async def update_reading_list(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    reading_list = await svc.get_list(db, current_user, list_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    # Who can see a list is a publishing decision, not an edit
+    need = "lists.publish" if "visibility" in fields else "lists.edit"
+    reading_list = await svc.get_list(db, current_user, list_id, need=need)
+    if need == "lists.publish" and set(fields) - {"visibility"}:
+        await svc.require(db, current_user, list_id, "lists.edit")
+    for field, value in fields.items():
         setattr(reading_list, field, value)
     await db.flush()
     await db.refresh(reading_list)
@@ -68,7 +78,7 @@ async def update_reading_list(
 
 
 async def _set_published(db: AsyncSession, user: User, list_id: uuid.UUID, published: bool):
-    reading_list = await svc.get_list(db, user, list_id)
+    reading_list = await svc.get_list(db, user, list_id, need="lists.publish")
     reading_list.is_published = published
     await db.flush()
     await db.refresh(reading_list)
@@ -110,7 +120,7 @@ async def create_section(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a section at the end of the list."""
-    reading_list = await svc.get_list(db, current_user, list_id)
+    reading_list = await svc.get_list(db, current_user, list_id, need="lists.edit")
     section = ListSection(
         reading_list_id=reading_list.id,
         sort_order=await svc.next_sort_order(
@@ -139,7 +149,7 @@ async def reorder_sections(
     db: AsyncSession = Depends(get_db),
 ):
     """Set section order. `section_ids` must name every section of the list exactly once."""
-    reading_list = await svc.get_list(db, current_user, list_id)
+    reading_list = await svc.get_list(db, current_user, list_id, need="lists.edit")
     sections = (
         await db.scalars(select(ListSection).where(ListSection.reading_list_id == reading_list.id))
     ).all()
@@ -155,7 +165,7 @@ async def update_section(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    section = await svc.get_section(db, current_user, section_id)
+    section = await svc.get_section(db, current_user, section_id, need="lists.edit")
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(section, field, value)
     await svc.touch_list(db, section.reading_list_id)
@@ -182,7 +192,7 @@ async def delete_section(
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a section. Refused (409) while it still has citations."""
-    section = await svc.get_section(db, current_user, section_id)
+    section = await svc.get_section(db, current_user, section_id, need="lists.edit")
     citation_count = await db.scalar(
         select(func.count()).select_from(Citation).where(Citation.list_section_id == section.id)
     )

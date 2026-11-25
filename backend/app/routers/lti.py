@@ -18,7 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models.models import LtiPlatform
+from app.models.models import LtiPlatform, ScopeType
+from app.services import access
 from app.services import lti_service as lti
 from app.services.ephemeral import EphemeralStore, get_ephemeral_store
 
@@ -117,6 +118,8 @@ async def lti_launch(
         if lti.is_staff(claims):
             user = await lti.resolve_user(db, platform, organization_id, claims)
             offering = await lti.provision_offering(db, deployment, organization_id, claims)
+            # Teaching this course in the LMS: may edit this offering's reading list
+            await access.grant(db, user, access.INSTRUCTOR, ScopeType.course_offering, offering.id)
             reading_list = await lti.list_for_offering(db, offering, create_for=user)
             code = secrets.token_urlsafe(32)
             await store.put(

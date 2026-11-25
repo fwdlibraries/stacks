@@ -14,6 +14,7 @@ from app.models.models import (
     User,
 )
 from app.services.auth_service import AuthService
+from tests.conftest import make_org_admin
 
 
 async def make_org_with_list(db: AsyncSession, slug: str, title: str) -> tuple[Organization, ReadingList]:
@@ -30,8 +31,9 @@ async def make_org_with_list(db: AsyncSession, slug: str, title: str) -> tuple[O
 
 async def auth_headers(client: AsyncClient, db: AsyncSession, org: Organization) -> dict:
     email = f"staff@{org.slug}.edu"
-    db.add(User(organization=org, email=email, display_name="Staff", password_hash=AuthService.hash_password("pw-long-enough")))
-    await db.commit()
+    user = User(organization=org, email=email, display_name="Staff", password_hash=AuthService.hash_password("pw-long-enough"))
+    db.add(user)
+    await make_org_admin(db, user, org)
     resp = await client.post("/api/v1/auth/local/login", json={"email": email, "password": "pw-long-enough"})
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 

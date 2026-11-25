@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.models import Permission, RolePermission, User, UserRoleAssignment
+from app.models.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -128,27 +128,3 @@ class AuthService:
         return user
 
     # ── Authorization ────────────────────────────────────────────────────────
-
-    @staticmethod
-    async def user_has_permission(user: User, permission_code: str, db: AsyncSession) -> bool:
-        """
-        True if the user is a system admin or holds a current role granting the permission.
-
-        TODO: scope checks. Assignments are scoped (organization, college, ...),
-        but this does not yet compare the assignment scope with the target resource.
-        """
-        if user.is_system_admin:
-            return True
-        now = datetime.now(UTC)
-        match = await db.scalar(
-            select(Permission.id)
-            .join(RolePermission, RolePermission.permission_id == Permission.id)
-            .join(UserRoleAssignment, UserRoleAssignment.role_id == RolePermission.role_id)
-            .where(
-                UserRoleAssignment.user_id == user.id,
-                Permission.code == permission_code,
-                (UserRoleAssignment.expires_at.is_(None)) | (UserRoleAssignment.expires_at > now),
-            )
-            .limit(1)
-        )
-        return match is not None

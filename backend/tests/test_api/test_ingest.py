@@ -8,6 +8,7 @@ from app.models.models import Citation, LibrarySource, User
 from app.routers.ingest import get_http_client
 from app.services import credentials
 from app.services.auth_service import AuthService
+from tests.conftest import make_org_admin
 from tests.test_api.test_list_editing import Org
 from tests.test_ingest.fake_http import FakeSources
 from tests.test_ingest.fixtures import CROSSREF_WORK, alma_bib
@@ -20,14 +21,15 @@ MMS = "991234567890123"
 async def setup(client: AsyncClient, db_session: AsyncSession):
     mine = await Org().build(db_session, "mine")
     theirs = await Org().build(db_session, "theirs")
+    editor = User(
+        organization=mine.org,
+        email="ed@mine.edu",
+        display_name="Editor",
+        password_hash=AuthService.hash_password("long-enough-pw"),
+    )
     db_session.add_all(
         [
-            User(
-                organization=mine.org,
-                email="ed@mine.edu",
-                display_name="Editor",
-                password_hash=AuthService.hash_password("long-enough-pw"),
-            ),
+            editor,
             LibrarySource(
                 organization_id=mine.org.id,
                 kind="alma",
@@ -36,7 +38,7 @@ async def setup(client: AsyncClient, db_session: AsyncSession):
             ),
         ]
     )
-    await db_session.commit()
+    await make_org_admin(db_session, editor, mine.org)
     resp = await client.post("/api/v1/auth/local/login", json={"email": "ed@mine.edu", "password": "long-enough-pw"})
     client.headers["Authorization"] = f"Bearer {resp.json()['access_token']}"
 

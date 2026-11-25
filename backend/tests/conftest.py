@@ -38,3 +38,13 @@ async def client(db_session: AsyncSession):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+async def make_org_admin(db: AsyncSession, user, organization) -> None:
+    """Give a test user the Administrator role for their whole organization."""
+    from app.models.models import ScopeType
+    from app.services import access
+
+    await db.flush()
+    await access.grant(db, user, access.ADMINISTRATOR, ScopeType.organization, organization.id)
+    await db.commit()

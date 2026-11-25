@@ -113,7 +113,7 @@ class TargetList(BaseModel):
 async def targets(current_user: User = Depends(get_extension_user), db: AsyncSession = Depends(get_db)):
     """The organization's reading lists with their sections, most recently edited first."""
     lists = await db.scalars(
-        svc.org_lists_query(current_user)
+        (await svc.visible_lists_query(db, current_user, "lists.edit"))
         .options(selectinload(ReadingList.sections), selectinload(ReadingList.course_template))
         .order_by(ReadingList.updated_at.desc())
         .limit(100)
