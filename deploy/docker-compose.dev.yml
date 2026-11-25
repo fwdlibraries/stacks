@@ -31,8 +31,6 @@ services:
     command: npm run dev -- --host
     environment:
       VITE_API_PROXY_TARGET: http://app:8000
-      # Extra hostnames the dev server answers to, e.g. the tunnel's (comma-separated)
-      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     volumes:
       - ../frontend:/app
       - /app/node_modules
@@ -53,12 +51,14 @@ services:
     profiles: ["proxy"]
 
   # Cloudflare Tunnel: serves the dev stack at a fixed public hostname, for testing
-  # LTI launches from a real LMS and the browser extension. Opt-in:
-  #   1. Create a tunnel in Cloudflare Zero Trust (Networks → Tunnels), with a
-  #      public hostname whose service is http://frontend:5173
-  #   2. Put its token in .env as CLOUDFLARE_TUNNEL_TOKEN (and the hostname in
-  #      VITE_ALLOWED_HOSTS and PUBLIC_BASE_URL)
-  #   3. docker compose ... --profile tunnel up -d tunnel
+  # LTI launches from a real LMS and the browser extension. Opt-in (profile "tunnel"):
+  #   1. Create a tunnel in Cloudflare Zero Trust (Networks → Tunnels). Give it a
+  #      public hostname whose service is HTTP, URL tunnel-proxy:8080
+  #   2. Put its token in .env as CLOUDFLARE_TUNNEL_TOKEN, and the hostname in
+  #      PUBLIC_BASE_URL (https://…)
+  #   3. docker compose ... --profile tunnel up -d --build
+  # The tunnel serves a production build (frontend-static), not the Vite dev
+  # server; rebuild it to see frontend changes there: up -d --build frontend-static
   tunnel:
     image: cloudflare/cloudflared:latest
     profiles: ["tunnel"]
@@ -67,7 +67,32 @@ services:
       # Read from the environment, so the token never appears in `ps` or compose output
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
     depends_on:
-      - frontend
+      - tunnel-proxy
+    restart: unless-stopped
+    networks:
+      - stacks
+
+  # The tunnel's front door: routing, rate limits, no API docs (deploy/nginx/tunnel.conf)
+  tunnel-proxy:
+    image: nginx:1.27-alpine
+    profiles: ["tunnel"]
+    volumes:
+      - ./nginx/tunnel.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+      - frontend-static
+    restart: unless-stopped
+    networks:
+      - stacks
+
+  # Production build of the frontend, for the tunnel
+  frontend-static:
+    build:
+      context: ../frontend
+      target: prod
+    profiles: ["tunnel"]
+    environment:
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
     restart: unless-stopped
     networks:
       - stacks
