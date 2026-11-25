@@ -1,5 +1,4 @@
 """Look up citations by identifier and add them bound to their source record."""
-import dataclasses
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -18,7 +17,6 @@ from app.ingest.resolvers import BY_SYSTEM, ResolveContext, primo
 from app.ingest.sources import load_sources
 from app.models.models import Citation, User
 from app.schemas.ingest import (
-    CandidateCitation,
     CandidateOut,
     CitationFromSource,
     IdentifierOut,
@@ -57,16 +55,7 @@ async def resolve_context(
 
 
 def _candidate_out(candidate: Candidate) -> CandidateOut:
-    draft = {k: v for k, v in dataclasses.asdict(candidate.draft).items() if k in CandidateCitation.model_fields}
-    return CandidateOut(
-        source_system=candidate.source_system,
-        source_identifier=candidate.source_identifier,
-        match_method=candidate.match_method,
-        confidence=candidate.confidence,
-        authoritative=candidate.authoritative,
-        availability=candidate.availability,
-        citation=CandidateCitation.model_validate({k: v for k, v in draft.items() if v is not None}),
-    )
+    return CandidateOut.from_candidate(candidate)
 
 
 def _fields_or_422(candidate: Candidate) -> dict:

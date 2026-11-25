@@ -26,6 +26,7 @@ import { CitationFormModal } from '@/components/citations/CitationFormModal'
 import { ConfirmModal } from '@/components/common/ConfirmModal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ListDetailsModal } from '@/components/lists/ListDetailsModal'
+import { BulkImportModal } from '@/components/lists/BulkImportModal'
 import { SectionFormModal } from '@/components/lists/SectionFormModal'
 import { ListDnd, SectionCitations, SortableCitation, SortableSection } from '@/components/lists/SortableList'
 
@@ -35,6 +36,7 @@ type Dialog =
   | { kind: 'deleteSection'; section: ListSection }
   | { kind: 'citation'; section: ListSection; citation?: Citation }
   | { kind: 'deleteCitation'; citation: Citation }
+  | { kind: 'import' }
   | null
 
 const VISIBILITY_LABELS = { public: 'Public', unlisted: 'Unlisted', institution: 'Organization only' }
@@ -47,6 +49,7 @@ export default function ListEditorView() {
   const { listId = '' } = useParams<{ listId: string }>()
   const { data: list, isLoading, isError } = useReadingListFull(listId)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const clicks = useListClicks(listId)
 
   const setPublished = useSetPublished(listId)
@@ -120,6 +123,11 @@ export default function ListEditorView() {
           <Button variant="outline-secondary" onClick={() => open({ kind: 'details' })}>
             Edit details
           </Button>
+          {list.sections.length > 0 && (
+            <Button variant="outline-secondary" onClick={() => open({ kind: 'import' })}>
+              Import
+            </Button>
+          )}
           <Button
             variant={list.is_published ? 'outline-primary' : 'primary'}
             disabled={setPublished.isPending}
@@ -129,6 +137,12 @@ export default function ListEditorView() {
           </Button>
         </div>
       </header>
+
+      {notice && (
+        <Alert variant="success" className="mt-3 mb-0" dismissible onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
 
       {flagged > 0 && (
         <Alert variant="warning" className="mt-3 mb-0">
@@ -281,6 +295,18 @@ export default function ListEditorView() {
               : createSection.mutate(input, { onSuccess: close })
           }
           onCancel={close}
+        />
+      )}
+
+      {dialog?.kind === 'import' && (
+        <BulkImportModal
+          listId={listId}
+          sections={list.sections}
+          onCancel={close}
+          onDone={(summary) => {
+            setNotice(summary)
+            close()
+          }}
         />
       )}
 

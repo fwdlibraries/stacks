@@ -118,3 +118,47 @@ def _broadcast(list_id: str | None, message: dict):
     """Broadcast a WebSocket message to all subscribers of a list."""
     # TODO: implement via Redis pub/sub → WebSocket manager
     logger.debug("WS broadcast list=%s: %s", list_id, message)
+
+
+@celery_app.task
+def match_bulk_import(job_id: str) -> None:
+    """Match a bulk import's entries (app/ingest/bulk.py)."""
+    asyncio.run(_match_bulk_import(job_id))
+
+
+async def _match_bulk_import(job_id: str) -> None:
+    import uuid
+
+    import httpx
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.config import settings
+    from app.ingest.bulk import run_matching
+    from app.ingest.resolvers import ResolveContext
+    from app.ingest.sources import load_sources
+    from app.models.models import BackgroundJob
+    from app.services.credentials import CredentialError
+
+    # Fresh engine per run: each asyncio.run() is a new event loop
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            job = await db.get(BackgroundJob, uuid.UUID(job_id))
+            if job is None:
+                return
+            try:
+                sources = await load_sources(db, uuid.UUID(job.payload["organization_id"]))
+            except CredentialError:
+                logger.exception("Library source keys can't be decrypted; matching with open sources only")
+                sources = {}
+            async with httpx.AsyncClient(timeout=20.0) as http:
+                try:
+                    await run_matching(db, job.id, ResolveContext(http=http, sources=sources))
+                except Exception as exc:
+                    logger.exception("Bulk import %s failed", job_id)
+                    await db.rollback()
+                    job = await db.get(BackgroundJob, job.id)
+                    job.status, job.error = "failed", str(exc)[:500]
+                    await db.commit()
+    finally:
+        await engine.dispose()

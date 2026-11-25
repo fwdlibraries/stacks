@@ -1,4 +1,5 @@
 """Resolver interface: turn an identifier into candidates, or re-fetch a bound record."""
+import asyncio
 from dataclasses import dataclass, field
 
 import httpx
@@ -12,6 +13,13 @@ from app.ingest.sources import Source
 class ResolveContext:
     http: httpx.AsyncClient
     sources: dict[str, Source] = field(default_factory=dict)
+    # Per-source concurrency limits, created on first use (per context, so per event loop)
+    _limits: dict[str, asyncio.Semaphore] = field(default_factory=dict, repr=False)
+
+    def limit(self, name: str, slots: int) -> asyncio.Semaphore:
+        if name not in self._limits:
+            self._limits[name] = asyncio.Semaphore(slots)
+        return self._limits[name]
 
 
 class Resolver:
