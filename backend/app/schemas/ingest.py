@@ -38,6 +38,21 @@ class CandidateCitation(BaseModel):
 
 
 class CandidateOut(BaseModel):
+    @classmethod
+    def from_candidate(cls, candidate) -> "CandidateOut":
+        import dataclasses
+
+        draft = {k: v for k, v in dataclasses.asdict(candidate.draft).items() if k in CandidateCitation.model_fields}
+        return cls(
+            source_system=candidate.source_system,
+            source_identifier=candidate.source_identifier,
+            match_method=candidate.match_method,
+            confidence=candidate.confidence,
+            authoritative=candidate.authoritative,
+            availability=candidate.availability,
+            citation=CandidateCitation.model_validate({k: v for k, v in draft.items() if v is not None}),
+        )
+
     source_system: str
     source_identifier: str
     match_method: str

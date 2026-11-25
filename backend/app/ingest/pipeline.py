@@ -64,9 +64,14 @@ async def search(text: str, ctx: ResolveContext, *, offset: int = 0, limit: int 
     Primo records so nothing promises a sync Stacks can't do.
     """
     total, candidates = await primo.search_candidates(ctx, text, offset=offset, limit=limit)
+    return total, await reconcile_holdings(candidates, ctx)
+
+
+async def reconcile_holdings(candidates: list[Candidate], ctx: ResolveContext) -> list[Candidate]:
+    """Keep `alma` only for records the institution's Alma holds; others become Primo records."""
     alma_ids = [c.source_identifier for c in candidates if c.source_system == "alma"]
     if not alma_ids:
-        return total, candidates
+        return candidates
     held: set[str] = set()
     if "alma" in ctx.sources:
         try:
@@ -77,4 +82,4 @@ async def search(text: str, ctx: ResolveContext, *, offset: int = 0, limit: int 
         if candidate.source_system == "alma" and candidate.source_identifier not in held:
             candidate.source_system = "primo"
             candidate.source_identifier = f"alma{candidate.source_identifier}"
-    return total, candidates
+    return candidates

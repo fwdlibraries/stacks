@@ -1,8 +1,9 @@
 """Crossref: metadata for DOIs. Open data; not the library's system, so not authoritative."""
+import asyncio
 from urllib.parse import quote
 
 from app.config import settings
-from app.ingest.candidate import Candidate
+from app.ingest.candidate import Candidate, SourceError
 from app.ingest.draft import CitationDraft
 from app.ingest.identifiers import Identifier, normalize_doi, normalize_isbn
 from app.ingest.resolvers.base import ResolveContext, Resolver, get_json
@@ -96,3 +97,49 @@ class CrossrefResolver(Resolver):
             confidence=1.0,
             raw=work,
         )
+
+
+# Crossref's public pool rate-limits bursts (more so without METADATA_CONTACT_EMAIL);
+# bulk imports match several entries at once, so searches go one at a time
+SEARCH_SLOTS = 1
+RETRY_DELAYS = (1.5, 3.0)
+
+
+async def search_bibliographic(text: str, ctx: ResolveContext, *, rows: int = 3) -> list[Candidate]:
+    """Crossref's reference matching: free text (or title + author + year) to works.
+
+    Confidence is left at 0: callers score candidates against what they searched for.
+    """
+    async with ctx.limit("crossref-search", SEARCH_SLOTS):
+        for delay in (*RETRY_DELAYS, None):
+            try:
+                return await _search(text, ctx, rows)
+            except SourceError as exc:
+                if "rate-limiting" not in exc.message or delay is None:
+                    raise
+                await asyncio.sleep(delay)
+        return []
+
+
+async def _search(text: str, ctx: ResolveContext, rows: int) -> list[Candidate]:
+    data = await get_json(
+        ctx,
+        "Crossref",
+        API.rstrip("/"),
+        params={"query.bibliographic": text[:500], "rows": rows, "select": "DOI,type,title,subtitle,author,editor,"
+                "container-title,publisher,volume,issue,page,ISSN,ISBN,published-print,published-online,issued"},
+        headers={"User-Agent": user_agent()},
+    )
+    items = ((data or {}).get("message") or {}).get("items") or []
+    return [
+        Candidate(
+            draft=to_draft(work),
+            source_system="crossref",
+            source_identifier=normalize_doi(work.get("DOI") or "") or "",
+            match_method="search",
+            confidence=0.0,
+            raw=work,
+        )
+        for work in items
+        if work.get("DOI")
+    ]
