@@ -117,3 +117,44 @@ def test_password_hashing_limits():
     assert not AuthService.verify_password("x" * 100, AuthService.hash_password(PASSWORD))
     with pytest.raises(ValueError):
         AuthService.hash_password("x" * 73)
+
+
+
+async def test_repeated_failures_pause_sign_in_for_that_account(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "login_max_failures", 3)
+    db_session.add(
+        User(organization=Organization(name="Org", slug="org-rl"), email="ada@example.edu",
+             display_name="Ada", password_hash=AuthService.hash_password("correct horse battery"))
+    )
+    await db_session.commit()
+
+    async def login(email, password):
+        return await client.post("/api/v1/auth/local/login", json={"email": email, "password": password})
+
+    for _ in range(3):
+        assert (await login("ada@example.edu", "wrong password!")).status_code == 401
+    paused = await login("ADA@example.edu", "correct horse battery")  # even the right password, any case
+    assert paused.status_code == 429
+    assert paused.headers["retry-after"] == str(settings.login_lockout_minutes * 60)
+
+    # Other accounts are unaffected; unknown addresses are counted the same way
+    for _ in range(3):
+        assert (await login("nobody@example.edu", "wrong password!")).status_code == 401
+    assert (await login("nobody@example.edu", "wrong password!")).status_code == 429
+
+
+async def test_success_resets_the_count(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "login_max_failures", 3)
+    db_session.add(
+        User(organization=Organization(name="Org", slug="org-rl2"), email="bo@example.edu",
+             display_name="Bo", password_hash=AuthService.hash_password("correct horse battery"))
+    )
+    await db_session.commit()
+    for password in ("wrong one!!!", "wrong two!!!", "correct horse battery", "wrong 3!!!!!", "wrong 4!!!!!"):
+        await client.post("/api/v1/auth/local/login", json={"email": "bo@example.edu", "password": password})
+    ok = await client.post("/api/v1/auth/local/login", json={"email": "bo@example.edu", "password": "correct horse battery"})
+    assert ok.status_code == 200
