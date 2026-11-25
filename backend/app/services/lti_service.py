@@ -342,3 +342,18 @@ async def public_path(db: AsyncSession, offering: CourseOffering) -> str:
         )
     ).one()
     return "/public/" + "/".join(quote(part, safe="") for part in (row.slug, row.code, offering.term))
+
+
+def generate_tool_keys() -> tuple[str, str]:
+    """A new RSA key pair for signing as the tool (PEM private, PEM public)."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    ).decode()
+    public_pem = key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode()
+    return private_pem, public_pem

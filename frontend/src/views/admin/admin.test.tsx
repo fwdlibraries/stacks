@@ -4,6 +4,8 @@ import AdminLayout from './AdminLayout'
 import OrganizationView from './OrganizationView'
 import ConnectionsView from './ConnectionsView'
 import LinkResolutionView from './LinkResolutionView'
+import LmsView from './LmsView'
+import PeopleView from './PeopleView'
 import { renderRoutes } from '@/test/renderWithProviders'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -15,10 +17,10 @@ afterEach(() => {
   useAuthStore.setState({ token: null, refreshToken: null })
 })
 
-const ME = (manage: boolean) => ({
+const ME = (manage: boolean, people = manage) => ({
   id: 'u1', email: 'a@uni.edu', display_name: 'Ada', is_system_admin: false, must_change_password: false,
   organization: { id: 'o1', name: 'Uni', slug: 'uni' },
-  can: { manage_settings: manage, manage_people: manage, manage_courses: manage, view_reports: manage },
+  can: { manage_settings: manage, manage_people: people, manage_courses: manage, view_reports: manage },
 })
 
 const ORG = {
@@ -39,10 +41,33 @@ const LINKS = {
   available: { libkey: false, alma: true, open_access: true },
 }
 
-function mockGets(manage = true) {
+const LMS = {
+  tool: { login_url: 'https://s.uni.edu/lti/login', redirect_url: 'https://s.uni.edu/lti/launch',
+          target_link_uri: 'https://s.uni.edu/lti/launch', jwks_url: 'https://s.uni.edu/lti/jwks' },
+  platforms: [],
+}
+
+const PEOPLE = {
+  total: 1, roles: ['Administrator', 'Librarian', 'Instructor', 'Viewer'], can_change_accounts: false,
+  people: [{
+    id: 'p1', display_name: 'Bob', email: 'bob@uni.edu', is_active: true, is_system_admin: false, from_lms: true,
+    has_password: false, roles: [
+      { id: 'a1', role: 'Viewer', scope: { type: 'college', id: 'c2', label: 'Science' }, can_remove: false },
+      { id: 'a2', role: 'Instructor', scope: { type: 'course_offering', id: 'o1', label: 'HIST101 · fall-2026' }, can_remove: true },
+    ],
+  }],
+}
+
+const SCOPES = [
+  { type: 'college', id: 'c1', label: 'Arts' },
+  { type: 'department', id: 'd1', label: 'Arts › History' },
+]
+
+function mockGets(manage = true, people = manage) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     const data: Record<string, unknown> = {
-      '/auth/me': ME(manage), '/admin/organization': ORG, '/admin/sources': SOURCES, '/admin/link-resolution': LINKS,
+      '/auth/me': ME(manage, people), '/admin/organization': ORG, '/admin/sources': SOURCES, '/admin/link-resolution': LINKS,
+      '/admin/lms': LMS, '/admin/people': PEOPLE, '/admin/scopes': SCOPES,
     }
     return { data: data[url] }
   })
@@ -56,6 +81,8 @@ const routes = [
       { index: true, element: <OrganizationView /> },
       { path: 'connections', element: <ConnectionsView /> },
       { path: 'links', element: <LinkResolutionView /> },
+      { path: 'lms', element: <LmsView /> },
+      { path: 'people', element: <PeopleView /> },
     ],
   },
 ]
@@ -64,7 +91,7 @@ describe('Administration', () => {
   it('is only for organization-wide administrators', async () => {
     mockGets(false)
     renderRoutes(routes, '/admin')
-    expect(await screen.findByText(/Only administrators for the whole organization/)).toBeInTheDocument()
+    expect(await screen.findByText(/You don't have access to administration/)).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
@@ -146,5 +173,61 @@ describe('Administration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try' }))
     expect(await screen.findByText(/Students go straight to ScienceDirect/)).toBeInTheDocument()
     expect(post).toHaveBeenCalledWith('/admin/link-resolution/try', { query: '10.1016/x' })
+  })
+
+  it('sends people-only admins (college, department) straight to People', async () => {
+    mockGets(false, true)
+    renderRoutes(routes, '/admin')
+    expect(await screen.findByText('Bob')).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/people')
+    expect(screen.queryByRole('link', { name: 'Library connections' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('switch', { name: 'Account on' })).not.toBeInTheDocument()
+  })
+
+  it('gives and removes roles only where allowed', async () => {
+    mockGets(false, true)
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: {} })
+    const del = vi.spyOn(apiClient, 'delete').mockResolvedValue({ data: null })
+    renderRoutes(routes, '/admin/people')
+
+    expect(await screen.findByText('Bob')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Remove Viewer for Science/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Instructor for HIST101 · fall-2026 from Bob' }))
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/admin/people/p1/roles/a2'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add role' }))
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'Librarian' } })
+    fireEvent.change(screen.getByLabelText('Where'), { target: { value: 'department:d1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/admin/people/p1/roles', { role: 'Librarian', scope_type: 'department', scope_id: 'd1' })
+    )
+  })
+
+  it('shows the tool URLs to copy and registers an LMS', async () => {
+    mockGets()
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: LMS })
+    renderRoutes(routes, '/admin/lms')
+
+    expect(await screen.findByDisplayValue('https://s.uni.edu/lti/jwks')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Register an LMS' }))
+    const values: Record<string, string> = {
+      Issuer: 'https://uni.brightspace.com', 'Client ID': 'abc',
+      'OpenID Connect authentication endpoint': 'https://uni.brightspace.com/d2l/lti/authenticate',
+      'OAuth2 access token URL': 'https://auth.brightspace.com/core/connect/token',
+      'LMS keyset URL': 'https://uni.brightspace.com/d2l/.well-known/jwks', 'Deployment IDs': 'dep-1 dep-2',
+    }
+    for (const [label, value] of Object.entries(values)) {
+      fireEvent.change(screen.getByLabelText(label), { target: { value } })
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/admin/lms', {
+        issuer: 'https://uni.brightspace.com', client_id: 'abc',
+        auth_login_url: 'https://uni.brightspace.com/d2l/lti/authenticate',
+        auth_token_url: 'https://auth.brightspace.com/core/connect/token',
+        jwks_url: 'https://uni.brightspace.com/d2l/.well-known/jwks', deployment_ids: ['dep-1', 'dep-2'],
+      })
+    )
   })
 })

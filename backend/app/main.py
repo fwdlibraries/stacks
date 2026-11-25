@@ -7,6 +7,8 @@ from app.config import settings
 from app.middleware.audit import AuditLogMiddleware
 from app.routers import (
     admin,
+    admin_lms,
+    admin_people,
     auth,
     citations,
     extension,
@@ -74,6 +76,8 @@ def create_app() -> FastAPI:
     app.include_router(files.router,     prefix="/api/v1/files",     tags=["Files"])
     app.include_router(users.router,     prefix="/api/v1",           tags=["Users"])
     app.include_router(admin.router,     prefix="/api/v1/admin",     tags=["Admin"])
+    app.include_router(admin_lms.router, prefix="/api/v1/admin",     tags=["Admin"])
+    app.include_router(admin_people.router, prefix="/api/v1/admin",  tags=["Admin"])
     app.include_router(health.router,    prefix="/api/v1/health",    tags=["Health"])
 
     # Unauthenticated student list view

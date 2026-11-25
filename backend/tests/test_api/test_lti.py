@@ -12,7 +12,6 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.cli import _generate_tool_keys
 from app.config import settings
 from app.main import app
 from app.models.models import (
@@ -27,6 +26,7 @@ from app.models.models import (
 )
 from app.services import lti_service
 from app.services.ephemeral import MemoryStore, get_ephemeral_store
+from app.services.lti_service import generate_tool_keys
 
 ISSUER = "https://lms.example.edu"
 CLIENT_ID = "stacks-client"
@@ -42,7 +42,7 @@ OTHER_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 @pytest.fixture
 async def platform(db_session: AsyncSession, monkeypatch):
     org = Organization(name="Test University", slug="test-org")
-    private_pem, public_pem = _generate_tool_keys()
+    private_pem, public_pem = generate_tool_keys()
     db_session.add(org)
     await db_session.flush()
     platform = LtiPlatform(

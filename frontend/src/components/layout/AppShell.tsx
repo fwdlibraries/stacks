@@ -27,7 +27,7 @@ export function AppShell() {
               <Nav.Link as={NavLink} to="/lists">
                 Reading lists
               </Nav.Link>
-              {user?.can?.manage_settings && (
+              {(user?.can?.manage_settings || user?.can?.manage_people) && (
                 <Nav.Link as={NavLink} to="/admin">
                   Administration
                 </Nav.Link>

@@ -159,3 +159,151 @@ export function useTryLinkResolution() {
       (await apiClient.post<LinkCheckResult>('/admin/link-resolution/try', { query })).data,
   })
 }
+
+// ── LMS ────────────────────────────────────────────────────────────────────
+
+export interface LmsDeployment {
+  id: string
+  deployment_id: string
+  label?: string | null
+  is_active: boolean
+}
+
+export interface LmsPlatform {
+  id: string
+  issuer: string
+  client_id: string
+  auth_login_url: string
+  auth_token_url: string
+  jwks_url: string
+  is_active: boolean
+  created_at: string
+  deployments: LmsDeployment[]
+  people: number
+}
+
+export interface LmsSettings {
+  tool: { login_url: string; redirect_url: string; target_link_uri: string; jwks_url: string }
+  platforms: LmsPlatform[]
+}
+
+export interface LmsRegistration {
+  issuer: string
+  client_id: string
+  auth_login_url: string
+  auth_token_url: string
+  jwks_url: string
+  deployment_ids: string[]
+}
+
+const LMS = ['admin', 'lms']
+
+export function useLmsSettings() {
+  return useQuery({ queryKey: LMS, queryFn: async () => (await apiClient.get<LmsSettings>('/admin/lms')).data })
+}
+
+function useLmsMutation<V>(fn: (vars: V) => Promise<LmsSettings>) {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: fn, onSuccess: (data) => queryClient.setQueryData(LMS, data) })
+}
+
+export function useRegisterLms() {
+  return useLmsMutation(async (input: LmsRegistration) => (await apiClient.post('/admin/lms', input)).data)
+}
+
+export function useUpdateLms() {
+  return useLmsMutation(
+    async ({ id, ...input }: { id: string } & Partial<Pick<LmsPlatform, 'is_active' | 'auth_login_url' | 'auth_token_url' | 'jwks_url'>>) =>
+      (await apiClient.patch(`/admin/lms/${id}`, input)).data
+  )
+}
+
+export function useAddDeployment() {
+  return useLmsMutation(
+    async ({ platformId, deployment_id }: { platformId: string; deployment_id: string }) =>
+      (await apiClient.post(`/admin/lms/${platformId}/deployments`, { deployment_id })).data
+  )
+}
+
+export function useRemoveDeployment() {
+  return useLmsMutation(
+    async ({ platformId, id }: { platformId: string; id: string }) =>
+      (await apiClient.delete(`/admin/lms/${platformId}/deployments/${id}`)).data
+  )
+}
+
+// ── People ─────────────────────────────────────────────────────────────────
+
+export type ScopeType = 'organization' | 'college' | 'department' | 'course_template' | 'course_offering'
+
+export interface Scope {
+  type: ScopeType
+  id: string
+  label: string
+}
+
+export interface PersonRole {
+  id: string
+  role: string
+  scope: Scope
+  can_remove: boolean
+}
+
+export interface Person {
+  id: string
+  display_name: string
+  email: string
+  is_active: boolean
+  is_system_admin: boolean
+  from_lms: boolean
+  has_password: boolean
+  last_login_at?: string | null
+  roles: PersonRole[]
+}
+
+export interface PeoplePage {
+  people: Person[]
+  total: number
+  roles: string[]
+  can_change_accounts: boolean
+}
+
+export const PEOPLE_PAGE_SIZE = 50
+
+export function usePeople(q: string, offset: number) {
+  return useQuery({
+    queryKey: ['admin', 'people', q, offset],
+    queryFn: async () =>
+      (await apiClient.get<PeoplePage>('/admin/people', { params: { q: q || undefined, offset, limit: PEOPLE_PAGE_SIZE } })).data,
+    placeholderData: (previous) => previous,
+  })
+}
+
+export function useAssignableScopes() {
+  return useQuery({ queryKey: ['admin', 'scopes'], queryFn: async () => (await apiClient.get<Scope[]>('/admin/scopes')).data })
+}
+
+function usePeopleMutation<V, R>(fn: (vars: V) => Promise<R>) {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: fn, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'people'] }) })
+}
+
+export function useGiveRole() {
+  return usePeopleMutation(
+    async ({ userId, ...input }: { userId: string; role: string; scope_type: ScopeType; scope_id: string }) =>
+      (await apiClient.post(`/admin/people/${userId}/roles`, input)).data
+  )
+}
+
+export function useTakeRole() {
+  return usePeopleMutation(async ({ userId, id }: { userId: string; id: string }) => {
+    await apiClient.delete(`/admin/people/${userId}/roles/${id}`)
+  })
+}
+
+export function useSetAccountActive() {
+  return usePeopleMutation(
+    async ({ userId, is_active }: { userId: string; is_active: boolean }) =>
+      (await apiClient.patch(`/admin/people/${userId}`, { is_active })).data
+  )
+}

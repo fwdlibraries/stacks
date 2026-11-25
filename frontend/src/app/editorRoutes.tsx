@@ -11,6 +11,8 @@ import AdminLayout from '@/views/admin/AdminLayout'
 import OrganizationView from '@/views/admin/OrganizationView'
 import ConnectionsView from '@/views/admin/ConnectionsView'
 import LinkResolutionView from '@/views/admin/LinkResolutionView'
+import LmsView from '@/views/admin/LmsView'
+import PeopleView from '@/views/admin/PeopleView'
 
 /** Routes for the editor SPA (index.html). Student URLs under /public/ use public.html. */
 export const editorRoutes: RouteObject[] = [
@@ -35,6 +37,8 @@ export const editorRoutes: RouteObject[] = [
           { index: true, element: <OrganizationView /> },
           { path: 'connections', element: <ConnectionsView /> },
           { path: 'links', element: <LinkResolutionView /> },
+          { path: 'lms', element: <LmsView /> },
+          { path: 'people', element: <PeopleView /> },
         ],
       },
     ],

@@ -31,8 +31,6 @@ import sys
 import uuid
 from datetime import UTC, datetime
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import func, or_, select
 
 from app.database import AsyncSessionLocal
@@ -46,6 +44,7 @@ from app.models.models import (
     UserIdentity,
 )
 from app.services.auth_service import BCRYPT_MAX_BYTES, AuthService
+from app.services.lti_service import generate_tool_keys
 
 MIN_PASSWORD_LENGTH = 12
 ROLE_CHOICES = ["Administrator", "Librarian", "Instructor", "Viewer"]
@@ -100,17 +99,6 @@ async def create_user(args: argparse.Namespace) -> None:
         print(f"Created {kind} {email} in '{org.name}'{role}.")
 
 
-def _generate_tool_keys() -> tuple[str, str]:
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    private_pem = key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
-    ).decode()
-    public_pem = key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode()
-    return private_pem, public_pem
-
-
 async def register_lti_platform(args: argparse.Namespace) -> None:
     """Register an LMS (issuer + client_id), or add deployments to an existing registration."""
     async with AsyncSessionLocal() as db:
@@ -125,7 +113,7 @@ async def register_lti_platform(args: argparse.Namespace) -> None:
             missing = [f for f in ("auth_login_url", "auth_token_url", "jwks_url") if not getattr(args, f)]
             if missing:
                 sys.exit("New registrations need " + ", ".join("--" + m.replace("_", "-") for m in missing) + ".")
-            private_pem, public_pem = _generate_tool_keys()
+            private_pem, public_pem = generate_tool_keys()
             platform = LtiPlatform(
                 organization_id=org.id,
                 issuer=args.issuer,
