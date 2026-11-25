@@ -204,3 +204,56 @@ def list_condition(grants: Grants, permission: str) -> ColumnElement[bool]:
             )
         )
     return or_(*parts) if parts else false()
+
+
+# ── Managing people ──────────────────────────────────────────────────────────
+
+
+async def scope_chain(
+    db: AsyncSession, scope_type: ScopeType, scope_id: uuid.UUID
+) -> tuple[list[tuple[ScopeType, uuid.UUID]], uuid.UUID] | None:
+    """The scope and everything above it, up to the organization; and the organization's id.
+    None if the scope doesn't exist."""
+    chain: list[tuple[ScopeType, uuid.UUID]] = [(scope_type, scope_id)]
+    if scope_type == ScopeType.course_offering:
+        template_id = await db.scalar(select(CourseOffering.course_template_id).where(CourseOffering.id == scope_id))
+        if template_id is None:
+            return None
+        scope_type, scope_id = ScopeType.course_template, template_id
+        chain.append((scope_type, scope_id))
+    if scope_type == ScopeType.course_template:
+        dept_id = await db.scalar(select(CourseTemplate.department_id).where(CourseTemplate.id == scope_id))
+        if dept_id is None:
+            return None
+        scope_type, scope_id = ScopeType.department, dept_id
+        chain.append((scope_type, scope_id))
+    if scope_type == ScopeType.department:
+        college_id = await db.scalar(select(Department.college_id).where(Department.id == scope_id))
+        if college_id is None:
+            return None
+        scope_type, scope_id = ScopeType.college, college_id
+        chain.append((scope_type, scope_id))
+    if scope_type == ScopeType.college:
+        org_id = await db.scalar(select(College.organization_id).where(College.id == scope_id))
+        if org_id is None:
+            return None
+        chain.append((ScopeType.organization, org_id))
+        return chain, org_id
+    if scope_type == ScopeType.organization:
+        return chain, scope_id
+    return None
+
+
+async def can_manage_scope(db: AsyncSession, grants: Grants, scope_type: ScopeType, scope_id: uuid.UUID) -> bool:
+    """May this person give or take roles at that scope? Only within their own
+    organization, and only at or below where they hold people.manage."""
+    found = await scope_chain(db, scope_type, scope_id)
+    if found is None:
+        return False
+    chain, org_id = found
+    if org_id != grants.user.organization_id:
+        return False
+    if grants.system_admin:
+        return True
+    held = grants.scopes.get("people.manage", set())
+    return any(link in held for link in chain)
