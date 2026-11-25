@@ -9,6 +9,7 @@
         --vid 01ABC_INST:MAIN --discovery-url https://abc.primo.exlibrisgroup.com [--tab ... --scope ...]
     python -m app.cli configure-source --org demo --kind libkey --library-id 1234
     python -m app.cli list-sources --org demo
+    python -m app.cli sync-catalogue --org demo [--limit 1000]
     python -m app.cli configure-links --org demo --stack libkey,alma,open_access [--cache-hours 6] [--timeout 2.5]
     python -m app.cli lookup --org demo "10.1000/xyz 978-0-14-044913-6"
     python -m app.cli generate-credentials-key
@@ -235,6 +236,29 @@ async def configure_links(args: argparse.Namespace) -> None:
     )
 
 
+async def sync_catalogue(args: argparse.Namespace) -> None:
+    import httpx
+
+    from app.ingest.resolvers import ResolveContext
+    from app.ingest.sources import load_sources
+    from app.ingest.sync import sync_organization
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        sources = await load_sources(db, org.id)
+        if "alma" not in sources:
+            sys.exit(f"'{org.name}' has no active Alma source; see configure-source.")
+        async with httpx.AsyncClient(timeout=30.0) as http:
+            report = await sync_organization(db, org.id, ResolveContext(http=http, sources=sources), limit=args.limit)
+        await db.commit()
+    print(
+        f"Checked {report.checked}: {report.updated} updated, {report.unchanged} unchanged, "
+        f"{report.flagged} flagged, {report.restored} restored, {report.skipped} skipped"
+    )
+    for error in report.errors:
+        print("Error:", error)
+
+
 async def list_sources(args: argparse.Namespace) -> None:
     async with AsyncSessionLocal() as db:
         org = await _get_org(db, args.org)
@@ -310,6 +334,10 @@ def main() -> None:
     p.add_argument("--cache-hours", type=float, help="Reuse a resolved link for this long (default 6)")
     p.add_argument("--timeout", type=float, help="Seconds before a slow step is skipped (default 2.5)")
 
+    p = sub.add_parser("sync-catalogue", help="Update citations bound to Alma records now")
+    p.add_argument("--org", required=True)
+    p.add_argument("--limit", type=int, default=1000, help="Citations to check, oldest-checked first")
+
     p = sub.add_parser("list-sources", help="Show an organization's library sources (never the keys)")
     p.add_argument("--org", required=True)
 
@@ -328,6 +356,8 @@ def main() -> None:
         asyncio.run(configure_source(args))
     elif args.command == "configure-links":
         asyncio.run(configure_links(args))
+    elif args.command == "sync-catalogue":
+        asyncio.run(sync_catalogue(args))
     elif args.command == "list-sources":
         asyncio.run(list_sources(args))
     elif args.command == "lookup":

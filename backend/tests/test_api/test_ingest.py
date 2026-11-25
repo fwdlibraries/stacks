@@ -238,3 +238,13 @@ async def test_staff_list_includes_live_links(client, setup):
     full = (await client.get(f"/api/v1/lists/{mine.list.id}/full")).json()
     [added] = [c for s in full["sections"] for c in s["citations"] if c["id"] == citation["id"]]
     assert (added["link_url"], added["link_kind"]) == (None, None)
+
+
+async def test_history_lists_sync_events(client, setup, db_session):
+    from app.models.models import CitationEvent
+    mine, _, _ = setup
+    citation = await add_bound(client, mine)
+    db_session.add(CitationEvent(citation_id=citation["id"], kind="updated", source_system="alma", details={"year": [1999, 2017]}))
+    await db_session.commit()
+    body = (await client.get(f"/api/v1/citations/{citation['id']}/history")).json()
+    assert [(e["kind"], e["details"]) for e in body] == [("updated", {"year": [1999, 2017]})]

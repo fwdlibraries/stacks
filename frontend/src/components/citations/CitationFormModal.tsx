@@ -5,6 +5,8 @@ import { FieldLabel, FormModal } from '@/components/common/FormModal'
 import { CitationLookup } from '@/components/citations/CitationLookup'
 import { LibrarySearch } from '@/components/citations/LibrarySearch'
 import { LinkCheck } from '@/components/citations/LinkCheck'
+import { SyncHistory } from '@/components/citations/SyncHistory'
+import { NEEDS_ATTENTION } from '@/lib/sourceStatus'
 import type { Citation, CitationInput, ResourceType } from '@/api/hooks/useLists'
 import { useIngestCapabilities, type LookupCandidate } from '@/api/hooks/useIngest'
 import {
@@ -234,9 +236,15 @@ export function CitationFormModal({
       ) : (
         <>
           {bound && (
-            <Alert variant="info" className="small d-flex align-items-start gap-2">
+            <Alert
+              variant={citation?.source_status && NEEDS_ATTENTION[citation.source_status] ? 'warning' : 'info'}
+              className="small d-flex align-items-start gap-2"
+            >
               <Books aria-hidden="true" size={20} className="flex-shrink-0" />
               <div>
+                {citation?.source_status && NEEDS_ATTENTION[citation.source_status] ? (
+                  <strong className="d-block mb-1">{NEEDS_ATTENTION[citation.source_status].explanation}</strong>
+                ) : null}
                 These details come from your library's catalogue and update automatically. You can still change
                 whether it's required and the notes.
                 {onUnlink && (
@@ -253,6 +261,7 @@ export function CitationFormModal({
               </div>
             </Alert>
           )}
+          {bound && citation && <SyncHistory citationId={citation.id} syncedAt={citation.source_synced_at} />}
           {citation && <LinkCheck citationId={citation.id} />}
           {bibliographicFields}
         </>

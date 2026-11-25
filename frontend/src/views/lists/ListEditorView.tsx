@@ -20,6 +20,7 @@ import {
 import { useCreateFromSource } from '@/api/hooks/useIngest'
 import { useListClicks } from '@/api/hooks/useLinks'
 import { apiErrorMessage } from '@/lib/apiError'
+import { needsAttention } from '@/lib/sourceStatus'
 import { CitationCard } from '@/components/citations/CitationCard'
 import { CitationFormModal } from '@/components/citations/CitationFormModal'
 import { ConfirmModal } from '@/components/common/ConfirmModal'
@@ -96,6 +97,8 @@ export default function ListEditorView() {
     )
   }
 
+  const flagged = list.sections.reduce((n, s) => n + s.citations.filter((c) => c.is_bound && needsAttention(c)).length, 0)
+
   return (
     <div style={{ maxWidth: '800px' }}>
       <nav aria-label="breadcrumb" className="small mb-2">
@@ -126,6 +129,14 @@ export default function ListEditorView() {
           </Button>
         </div>
       </header>
+
+      {flagged > 0 && (
+        <Alert variant="warning" className="mt-3 mb-0">
+          {flagged === 1
+            ? '1 citation needs attention: its library record was removed or hidden in the catalogue. Replace it, or open it and unlink it to keep the current details.'
+            : `${flagged} citations need attention: their library records were removed or hidden in the catalogue. Replace them, or open each one and unlink it to keep the current details.`}
+        </Alert>
+      )}
       {applyOrder.isError && (
         <Alert variant="danger" className="small mt-3" dismissible onClose={() => applyOrder.reset()}>
           {apiErrorMessage(applyOrder.error, 'The new order could not be saved, so it was undone.')}

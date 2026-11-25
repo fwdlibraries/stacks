@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Card, Badge, Button } from 'react-bootstrap'
-import { Books } from '@phosphor-icons/react'
+import { Books, Warning } from '@phosphor-icons/react'
+import { NEEDS_ATTENTION } from '@/lib/sourceStatus'
 import { resolveCitationLink, getLinkLabel } from '@/lib/citationLink'
 import type { Citation } from '@/api/hooks/useLists'
 
@@ -96,6 +97,19 @@ export function CitationCard({
               >
                 <Books aria-hidden="true" className="me-1" />
                 Library record
+              </Badge>
+            )}
+
+            {citation.is_bound && citation.source_status && NEEDS_ATTENTION[citation.source_status] && (
+              <Badge
+                bg="warning"
+                text="dark"
+                className="me-2 mb-1"
+                style={{ fontSize: '0.7rem' }}
+                title={NEEDS_ATTENTION[citation.source_status].explanation}
+              >
+                <Warning aria-hidden="true" className="me-1" />
+                {NEEDS_ATTENTION[citation.source_status].badge}
               </Badge>
             )}
 

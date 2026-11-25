@@ -207,7 +207,8 @@ class Citation(Base):
     # how sure that match is; a later AI resolver reports through the same fields.
     match_method: Mapped[str | None] = mapped_column(Text)        # 'identifier' | 'search' | ...
     match_confidence: Mapped[float | None] = mapped_column(Float)  # 0.0–1.0
-    # None/'ok' while the source record is live; 'missing' | 'unavailable' set by sync;
+    # None/'ok' while the source record is live; set by the catalogue sync:
+    # 'missing' (gone from Alma) | 'suppressed' (hidden from discovery);
     # 'unlinked' when staff detached the citation to edit it locally
     source_status: Mapped[str | None] = mapped_column(Text)
     source_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -257,6 +258,23 @@ class LibrarySource(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ─── Citation history ─────────────────────────────────────────────────────────
+
+class CitationEvent(Base):
+    """What happened to a citation outside of staff edits, mainly the catalogue sync:
+    'updated' (details: {field: [old, new]}), 'missing', 'suppressed', 'restored'."""
+    __tablename__ = "citation_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    citation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("citations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    source_system: Mapped[str | None] = mapped_column(Text)
+    details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 # ─── Link clicks ──────────────────────────────────────────────────────────────

@@ -249,4 +249,36 @@ describe('ListEditorView', () => {
       })
     )
   })
+
+  it('flags library records removed from the catalogue and shows what the sync changed', async () => {
+    const gone = {
+      ...LIST.sections[0].citations[0],
+      is_bound: true,
+      source_system: 'alma',
+      source_status: 'missing',
+      source_synced_at: '2026-11-20T07:15:00Z',
+    }
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/citations/c1/history') {
+        return {
+          data: [
+            { occurred_at: '2026-11-20T07:15:00Z', kind: 'missing', details: {} },
+            { occurred_at: '2026-11-02T07:15:00Z', kind: 'updated', details: { title: ['a', 'b'], year: [1, 2] } },
+          ],
+        }
+      }
+      return { data: { ...LIST, sections: [{ ...LIST.sections[0], citations: [gone] }, LIST.sections[1]] } }
+    })
+    renderRoutes(routes, '/lists/l1')
+
+    expect(await screen.findByText(/1 citation needs attention/)).toBeInTheDocument()
+    expect(screen.getByText('Removed from catalogue')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit What Is History?' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/no longer in your library's catalogue/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Last checked against the catalogue on/)).toBeInTheDocument()
+    expect(await within(dialog).findByText(/Record removed from the catalogue/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Updated from the catalogue: title, year/)).toBeInTheDocument()
+  })
 })
