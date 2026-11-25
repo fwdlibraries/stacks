@@ -13,6 +13,7 @@ import ConnectionsView from '@/views/admin/ConnectionsView'
 import LinkResolutionView from '@/views/admin/LinkResolutionView'
 import LmsView from '@/views/admin/LmsView'
 import PeopleView from '@/views/admin/PeopleView'
+import ReportsView from '@/views/admin/ReportsView'
 
 /** Routes for the editor SPA (index.html). Student URLs under /public/ use public.html. */
 export const editorRoutes: RouteObject[] = [
@@ -39,6 +40,7 @@ export const editorRoutes: RouteObject[] = [
           { path: 'links', element: <LinkResolutionView /> },
           { path: 'lms', element: <LmsView /> },
           { path: 'people', element: <PeopleView /> },
+          { path: 'reports', element: <ReportsView /> },
         ],
       },
     ],
