@@ -7,7 +7,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_extension_user
 from app.models.models import Citation, CitationEvent, ImportItem, User
 from app.schemas.lists import (
     BOUND_EDITABLE_FIELDS,
@@ -32,7 +32,7 @@ router = APIRouter()
 async def create_citation(
     section_id: uuid.UUID,
     body: CitationCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_extension_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Add a citation at the end of a section."""

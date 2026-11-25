@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_extension_user
 from app.ingest import pipeline
 from app.ingest.candidate import Candidate, SourceError
 from app.ingest.fields import UnusableRecord, citation_fields
@@ -41,7 +41,7 @@ async def get_http_client() -> AsyncIterator[httpx.AsyncClient]:
 
 
 async def resolve_context(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_extension_user),
     db: AsyncSession = Depends(get_db),
     http: httpx.AsyncClient = Depends(get_http_client),
 ) -> ResolveContext:
@@ -110,7 +110,7 @@ async def search(body: SearchRequest, ctx: ResolveContext = Depends(resolve_cont
 async def create_from_source(
     section_id: uuid.UUID,
     body: CitationFromSource,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_extension_user),
     db: AsyncSession = Depends(get_db),
     ctx: ResolveContext = Depends(resolve_context),
 ):

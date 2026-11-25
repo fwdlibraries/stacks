@@ -9,6 +9,7 @@ from app.routers import (
     admin,
     auth,
     citations,
+    extension,
     files,
     go,
     health,
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(citations.router, prefix="/api/v1",           tags=["Citations"])
     app.include_router(ingest.router,    prefix="/api/v1",           tags=["Ingest"])
     app.include_router(go.router,        prefix="/api/v1",           tags=["Links"])
+    app.include_router(extension.router, prefix="/api/v1",           tags=["Browser extension"])
     app.include_router(imports.router,   prefix="/api/v1",           tags=["Import"])
     app.include_router(files.router,     prefix="/api/v1/files",     tags=["Files"])
     app.include_router(users.router,     prefix="/api/v1",           tags=["Users"])
