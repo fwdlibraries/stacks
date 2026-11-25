@@ -14,6 +14,7 @@ from app.models.models import (
     User,
 )
 from app.services.auth_service import AuthService
+from tests.conftest import make_org_admin
 
 
 class Org:
@@ -37,15 +38,14 @@ class Org:
 async def setup(client: AsyncClient, db_session: AsyncSession):
     mine = await Org().build(db_session, "mine")
     theirs = await Org().build(db_session, "theirs")
-    db_session.add(
-        User(
-            organization=mine.org,
-            email="ed@mine.edu",
-            display_name="Editor",
-            password_hash=AuthService.hash_password("long-enough-pw"),
-        )
+    editor = User(
+        organization=mine.org,
+        email="ed@mine.edu",
+        display_name="Editor",
+        password_hash=AuthService.hash_password("long-enough-pw"),
     )
-    await db_session.commit()
+    db_session.add(editor)
+    await make_org_admin(db_session, editor, mine.org)
     resp = await client.post("/api/v1/auth/local/login", json={"email": "ed@mine.edu", "password": "long-enough-pw"})
     client.headers["Authorization"] = f"Bearer {resp.json()['access_token']}"
     return mine, theirs

@@ -36,7 +36,7 @@ async def create_citation(
     db: AsyncSession = Depends(get_db),
 ):
     """Add a citation at the end of a section."""
-    section = await svc.get_section(db, current_user, section_id)
+    section = await svc.get_section(db, current_user, section_id, need="lists.edit")
     citation = Citation(
         list_section_id=section.id,
         sort_order=await svc.next_sort_order(db, Citation.sort_order, Citation.list_section_id == section.id),
@@ -59,8 +59,8 @@ async def update_citation(
     db: AsyncSession = Depends(get_db),
 ):
     """Update citation fields. Sending `list_section_id` moves it to the end of that section."""
-    citation = await svc.get_citation(db, current_user, citation_id)
-    source = await svc.get_section(db, current_user, citation.list_section_id)
+    citation = await svc.get_citation(db, current_user, citation_id, need="lists.edit")
+    source = await svc.get_section(db, current_user, citation.list_section_id, need="lists.edit")
     fields = body.to_model_fields()
 
     if citation.is_bound:
@@ -80,7 +80,7 @@ async def update_citation(
 
     target_id = fields.pop("list_section_id", None)
     if target_id is not None and target_id != citation.list_section_id:
-        target = await svc.get_section(db, current_user, target_id)
+        target = await svc.get_section(db, current_user, target_id, need="lists.edit")
         if target.reading_list_id != source.reading_list_id:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -109,8 +109,8 @@ async def delete_citation(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    citation = await svc.get_citation(db, current_user, citation_id)
-    section = await svc.get_section(db, current_user, citation.list_section_id)
+    citation = await svc.get_citation(db, current_user, citation_id, need="lists.edit")
+    section = await svc.get_section(db, current_user, citation.list_section_id, need="lists.edit")
     # Keep import history, but detach it from the citation being deleted
     await db.execute(
         update(ImportItem)
@@ -134,7 +134,7 @@ async def reorder_citations(
     db: AsyncSession = Depends(get_db),
 ):
     """Set citation order. `citation_ids` must name every citation in the section exactly once."""
-    section = await svc.get_section(db, current_user, section_id)
+    section = await svc.get_section(db, current_user, section_id, need="lists.edit")
     citations = (await db.scalars(select(Citation).where(Citation.list_section_id == section.id))).all()
     svc.apply_order(citations, body.citation_ids, "citation_ids")
     await svc.touch_list(db, section.reading_list_id)
@@ -152,10 +152,10 @@ async def unlink_citation(
     It keeps its current metadata and provenance but no longer syncs. This can't
     be undone; to rebind, add the record again.
     """
-    citation = await svc.get_citation(db, current_user, citation_id)
+    citation = await svc.get_citation(db, current_user, citation_id, need="lists.edit")
     if not citation.is_bound:
         raise HTTPException(status.HTTP_409_CONFLICT, "This citation isn't linked to a library record")
-    section = await svc.get_section(db, current_user, citation.list_section_id)
+    section = await svc.get_section(db, current_user, citation.list_section_id, need="lists.edit")
     citation.source_status = "unlinked"
     await svc.touch_list(db, section.reading_list_id)
     await db.flush()

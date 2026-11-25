@@ -100,6 +100,8 @@ export default function ListEditorView() {
     )
   }
 
+  const canEdit = Boolean(list.can_edit)
+  const canPublish = Boolean(list.can_publish)
   const flagged = list.sections.reduce((n, s) => n + s.citations.filter((c) => c.is_bound && needsAttention(c)).length, 0)
 
   return (
@@ -120,23 +122,33 @@ export default function ListEditorView() {
           <p className="small text-body-secondary mb-0">Visibility: {VISIBILITY_LABELS[list.visibility]}</p>
         </div>
         <div className="d-flex gap-2">
-          <Button variant="outline-secondary" onClick={() => open({ kind: 'details' })}>
-            Edit details
-          </Button>
-          {list.sections.length > 0 && (
+          {canEdit && (
+            <Button variant="outline-secondary" onClick={() => open({ kind: 'details' })}>
+              Edit details
+            </Button>
+          )}
+          {canEdit && list.sections.length > 0 && (
             <Button variant="outline-secondary" onClick={() => open({ kind: 'import' })}>
               Import
             </Button>
           )}
-          <Button
-            variant={list.is_published ? 'outline-primary' : 'primary'}
-            disabled={setPublished.isPending}
-            onClick={() => setPublished.mutate(!list.is_published)}
-          >
-            {list.is_published ? 'Unpublish' : 'Publish'}
-          </Button>
+          {canPublish && (
+            <Button
+              variant={list.is_published ? 'outline-primary' : 'primary'}
+              disabled={setPublished.isPending}
+              onClick={() => setPublished.mutate(!list.is_published)}
+            >
+              {list.is_published ? 'Unpublish' : 'Publish'}
+            </Button>
+          )}
         </div>
       </header>
+
+      {!canEdit && (
+        <Alert variant="info" className="mt-3 mb-0">
+          You can view this reading list but not change it.
+        </Alert>
+      )}
 
       {notice && (
         <Alert variant="success" className="mt-3 mb-0" dismissible onClose={() => setNotice(null)}>
@@ -169,12 +181,14 @@ export default function ListEditorView() {
           icon={ListPlus}
           heading="No sections yet"
           action={
-            <Button variant="primary" onClick={() => open({ kind: 'section' })}>
-              Add section
-            </Button>
+            canEdit ? (
+              <Button variant="primary" onClick={() => open({ kind: 'section' })}>
+                Add section
+              </Button>
+            ) : undefined
           }
         >
-          Add a section such as “Required” or “Week 1”, then add citations to it.
+          {canEdit ? 'Add a section such as “Required” or “Week 1”, then add citations to it.' : 'This list is empty.'}
         </EmptyState>
       )}
 
@@ -185,7 +199,7 @@ export default function ListEditorView() {
               <section className="mb-5" aria-labelledby={`section-${section.id}`}>
                 <div className="d-flex align-items-start justify-content-between gap-2 mb-2">
                   <div className="d-flex align-items-start gap-1">
-                    <div className="ms-n2">{handle}</div>
+                    {canEdit && <div className="ms-n2">{handle}</div>}
                     <div>
                       <h2 id={`section-${section.id}`} className="h3 mb-1">
                         {section.title}
@@ -195,7 +209,7 @@ export default function ListEditorView() {
                       )}
                     </div>
                   </div>
-                  <div className="d-flex gap-1 flex-shrink-0">
+                  <div className={canEdit ? 'd-flex gap-1 flex-shrink-0' : 'd-none'}>
                     <Button
                       variant="link"
                       size="sm"
@@ -222,7 +236,7 @@ export default function ListEditorView() {
                 <SectionCitations section={section}>
                   {section.citations.length === 0 && (
                     <p className="text-body-secondary small mb-2">
-                      No citations in this section. Add one, or drag one here.
+                      {canEdit ? 'No citations in this section. Add one, or drag one here.' : 'No citations in this section.'}
                     </p>
                   )}
                   {section.citations.map((citation) => (
@@ -234,30 +248,32 @@ export default function ListEditorView() {
                           linkPreview
                           clicks={list.is_published ? (clicks.data?.[citation.id] ?? { total: 0, last_30_days: 0 }) : undefined}
                           isDragging={isDragging}
-                          dragHandle={citationHandle}
-                          onEdit={(c) => open({ kind: 'citation', section, citation: c })}
-                          onDelete={() => open({ kind: 'deleteCitation', citation })}
+                          dragHandle={canEdit ? citationHandle : undefined}
+                          onEdit={canEdit ? (c) => open({ kind: 'citation', section, citation: c }) : undefined}
+                          onDelete={canEdit ? () => open({ kind: 'deleteCitation', citation }) : undefined}
                         />
                       )}
                     </SortableCitation>
                   ))}
                 </SectionCitations>
 
-                <Button
-                  variant="outline-primary"
-                  size="sm"
-                  className="d-inline-flex align-items-center gap-1 mt-1"
-                  onClick={() => open({ kind: 'citation', section })}
-                >
-                  <Plus aria-hidden="true" /> Add citation
-                </Button>
+                {canEdit && (
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    className="d-inline-flex align-items-center gap-1 mt-1"
+                    onClick={() => open({ kind: 'citation', section })}
+                  >
+                    <Plus aria-hidden="true" /> Add citation
+                  </Button>
+                )}
               </section>
             )}
           </SortableSection>
         ))}
       </ListDnd>
 
-      {list.sections.length > 0 && (
+      {canEdit && list.sections.length > 0 && (
         <Button
           variant="outline-secondary"
           className="d-inline-flex align-items-center gap-1"
@@ -272,6 +288,7 @@ export default function ListEditorView() {
       {dialog?.kind === 'details' && (
         <ListDetailsModal
           list={list}
+          canChangeVisibility={canPublish}
           isPending={updateList.isPending}
           error={errorOf(updateList, 'The details could not be saved.')}
           onSubmit={(input) => updateList.mutate(input, { onSuccess: close })}

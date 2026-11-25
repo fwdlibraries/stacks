@@ -19,9 +19,18 @@ interface ListDetailsModalProps {
   error?: string | null
   onSubmit: (input: ListDetailsInput) => void
   onCancel: () => void
+  /** False when the user may edit but not publish: visibility is a publishing decision */
+  canChangeVisibility?: boolean
 }
 
-export function ListDetailsModal({ list, isPending, error, onSubmit, onCancel }: ListDetailsModalProps) {
+export function ListDetailsModal({
+  list,
+  isPending,
+  error,
+  onSubmit,
+  onCancel,
+  canChangeVisibility = true,
+}: ListDetailsModalProps) {
   const [title, setTitle] = useState(list.title)
   const [description, setDescription] = useState(list.description ?? '')
   const [visibility, setVisibility] = useState<Visibility>(list.visibility)
@@ -31,7 +40,7 @@ export function ListDetailsModal({ list, isPending, error, onSubmit, onCancel }:
   const submit = () => {
     setTouched(true)
     if (titleMissing) return
-    onSubmit({ title, description, visibility })
+    onSubmit(canChangeVisibility ? { title, description, visibility } : { title, description })
   }
 
   return (
@@ -63,8 +72,11 @@ export function ListDetailsModal({ list, isPending, error, onSubmit, onCancel }:
           onChange={(e) => setDescription(e.target.value)}
         />
       </Form.Group>
-      <fieldset className="mb-3">
+      <fieldset className="mb-3" disabled={!canChangeVisibility}>
         <legend className="form-label fs-6">Visibility</legend>
+        {!canChangeVisibility && (
+          <p className="small text-body-secondary">You can't change who sees this list.</p>
+        )}
         {VISIBILITY_OPTIONS.map((option) => (
           <Form.Check
             key={option.value}

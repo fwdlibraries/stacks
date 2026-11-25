@@ -175,6 +175,8 @@ async def test_first_instructor_launch_provisions_course_and_signs_in(
     assert me.json()["display_name"] == "Ada Instructor"
     lists = await client.get("/api/v1/lists", headers={"Authorization": f"Bearer {tokens['access_token']}"})
     assert [item["id"] for item in lists.json()] == [list_id]
+    # Teaching the course in the LMS makes them its Instructor in Stacks
+    assert (lists.json()[0]["can_edit"], lists.json()[0]["can_publish"]) == (True, True)
 
 
 async def test_repeat_launches_reuse_course_list_and_user(client: AsyncClient, db_session: AsyncSession, platform, store):
@@ -184,6 +186,8 @@ async def test_repeat_launches_reuse_course_list_and_user(client: AsyncClient, d
     assert first["next"] == second["next"]
     assert await db_session.scalar(select(func.count()).select_from(ReadingList)) == 1
     assert await db_session.scalar(select(func.count()).select_from(User)) == 1
+    from app.models.models import UserRoleAssignment
+    assert await db_session.scalar(select(func.count()).select_from(UserRoleAssignment)) == 1  # granted once
 
 
 async def test_next_term_reuses_the_course_list(client: AsyncClient, db_session: AsyncSession, platform, store):

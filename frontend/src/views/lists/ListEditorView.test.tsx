@@ -10,6 +10,8 @@ const LIST: ReadingList = {
   title: 'HIST 101 Reading List',
   visibility: 'public',
   is_published: false,
+  can_edit: true,
+  can_publish: true,
   sections: [
     {
       id: 's1',
@@ -57,6 +59,8 @@ describe('ListEditorView', () => {
 
     expect(await screen.findByRole('button', { name: 'Delete section Week 1' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete section Required' })).not.toBeInTheDocument()
+    // Editors get drag handles (the read-only test checks they're absent otherwise)
+    expect(screen.getByRole('button', { name: 'Reorder section Week 1' })).toBeInTheDocument()
   })
 
   it('adds a citation to a section', async () => {
@@ -280,5 +284,16 @@ describe('ListEditorView', () => {
     expect(within(dialog).getByText(/Last checked against the catalogue on/)).toBeInTheDocument()
     expect(await within(dialog).findByText(/Record removed from the catalogue/)).toBeInTheDocument()
     expect(within(dialog).getByText(/Updated from the catalogue: title, year/)).toBeInTheDocument()
+  })
+
+  it('is read-only for people who can only view the list', async () => {
+    vi.spyOn(apiClient, 'get').mockResolvedValue({ data: { ...LIST, can_edit: false, can_publish: false } })
+    renderRoutes(routes, '/lists/l1')
+
+    expect(await screen.findByText('You can view this reading list but not change it.')).toBeInTheDocument()
+    for (const name of ['Publish', 'Edit details', 'Import', /Add citation/, /Add section/, 'Edit What Is History?']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('button', { name: /^Reorder/ })).not.toBeInTheDocument()
   })
 })

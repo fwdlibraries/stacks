@@ -69,6 +69,9 @@ export interface ReadingListSummary {
   visibility: Visibility
   is_published: boolean
   updated_at?: string
+  /** What the current user may do with it, from their roles */
+  can_edit?: boolean
+  can_publish?: boolean
 }
 
 export interface ReadingList extends ReadingListSummary {

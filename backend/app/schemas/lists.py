@@ -41,6 +41,9 @@ class ReadingListSummary(BaseModel):
     visibility: str
     is_published: bool
     updated_at: datetime
+    # What the current user may do with it (from their roles)
+    can_edit: bool = False
+    can_publish: bool = False
 
 
 class StaffReadingList(ReadingListSummary):

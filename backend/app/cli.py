@@ -1,6 +1,9 @@
 """Admin command line.
 
-    python -m app.cli create-user --org demo --email you@example.edu --name "Your Name" [--admin]
+    python -m app.cli create-user --org demo --email you@example.edu --name "Your Name" [--role Administrator]
+    python -m app.cli grant-role --org demo --email you@example.edu --role Librarian [--college ARTS | --department HIST | --course HIST101]
+    python -m app.cli revoke-role --org demo --email you@example.edu --role Librarian [--college … | --department … | --course …]
+    python -m app.cli roles --org demo [--email you@example.edu]
     python -m app.cli register-lti-platform --org demo --issuer https://lms.example.edu \
         --client-id ... --auth-login-url ... --auth-token-url ... --jwks-url ... \
         --deployment-id 1 [--deployment-id 2 ...]
@@ -27,7 +30,7 @@ from datetime import UTC, datetime
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.config import settings
 from app.database import AsyncSessionLocal
@@ -43,6 +46,7 @@ from app.models.models import (
 from app.services.auth_service import BCRYPT_MAX_BYTES, AuthService
 
 MIN_PASSWORD_LENGTH = 12
+ROLE_CHOICES = ["Administrator", "Librarian", "Instructor", "Viewer"]
 
 
 def _read_password(from_stdin: bool) -> str:
@@ -83,9 +87,15 @@ async def create_user(args: argparse.Namespace) -> None:
             UserIdentity(provider=IdentityProvider.local, provider_user_id=email, provider_email=email)
         )
         db.add(user)
+        await db.flush()
+        if args.role:
+            from app.models.models import ScopeType
+            from app.services import access
+            await access.grant(db, user, args.role, ScopeType.organization, org.id)
         await db.commit()
-        role = "system admin" if args.admin else "user"
-        print(f"Created {role} {email} in '{org.name}'.")
+        kind = "system admin" if args.admin else "user"
+        role = f" with role {args.role} for the whole organization" if args.role else " (no roles yet: see grant-role)"
+        print(f"Created {kind} {email} in '{org.name}'{role}.")
 
 
 def _generate_tool_keys() -> tuple[str, str]:
@@ -158,6 +168,115 @@ async def _get_org(db, slug: str) -> Organization:
     if org is None:
         sys.exit(f"No organization with slug '{slug}'.")
     return org
+
+
+async def _scope(db, org: Organization, args: argparse.Namespace):
+    """(scope_type, scope_id, label) from --college / --department / --course, else the organization."""
+    from app.models.models import College, CourseTemplate, Department, ScopeType
+
+    def matches(model, value):
+        return or_(func.lower(model.code) == value.lower(), func.lower(model.name) == value.lower())
+
+    if args.college:
+        found = await db.scalar(select(College).where(College.organization_id == org.id, matches(College, args.college)))
+        kind = ScopeType.college
+    elif args.department:
+        found = await db.scalar(
+            select(Department).join(Department.college)
+            .where(College.organization_id == org.id, matches(Department, args.department))
+        )
+        kind = ScopeType.department
+    elif args.course:
+        found = await db.scalar(
+            select(CourseTemplate).join(CourseTemplate.department).join(Department.college)
+            .where(College.organization_id == org.id, matches(CourseTemplate, args.course))
+        )
+        kind = ScopeType.course_template
+    else:
+        return ScopeType.organization, org.id, f"all of {org.name}"
+    if found is None:
+        sys.exit(f"No {kind.value.replace('_', ' ')} '{args.college or args.department or args.course}' in {org.name}.")
+    return kind, found.id, f"{kind.value.replace('_template', '').replace('_', ' ')} {found.name}"
+
+
+async def _user(db, org: Organization, email: str) -> User:
+    user = await db.scalar(
+        select(User).where(User.organization_id == org.id, func.lower(User.email) == email.strip().lower())
+    )
+    if user is None:
+        sys.exit(f"No user {email} in {org.name}.")
+    return user
+
+
+async def grant_role(args: argparse.Namespace) -> None:
+    from app.services import access
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        user = await _user(db, org, args.email)
+        scope_type, scope_id, label = await _scope(db, org, args)
+        await access.grant(db, user, args.role, scope_type, scope_id)
+        await db.commit()
+    print(f"{user.email} is now {args.role} for {label}.")
+
+
+async def revoke_role(args: argparse.Namespace) -> None:
+    from app.models.models import Role, UserRoleAssignment
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        user = await _user(db, org, args.email)
+        scope_type, scope_id, label = await _scope(db, org, args)
+        assignment = await db.scalar(
+            select(UserRoleAssignment).join(Role, Role.id == UserRoleAssignment.role_id).where(
+                UserRoleAssignment.user_id == user.id, Role.name == args.role,
+                UserRoleAssignment.scope_type == scope_type, UserRoleAssignment.scope_id == scope_id,
+            )
+        )
+        if assignment is None:
+            sys.exit(f"{user.email} isn't {args.role} for {label}.")
+        await db.delete(assignment)
+        await db.commit()
+    print(f"{user.email} is no longer {args.role} for {label}.")
+
+
+async def list_roles(args: argparse.Namespace) -> None:
+    from app.models.models import (
+        College,
+        CourseOffering,
+        CourseTemplate,
+        Department,
+        Role,
+        ScopeType,
+        UserRoleAssignment,
+    )
+
+    names = {ScopeType.college: College, ScopeType.department: Department, ScopeType.course_template: CourseTemplate}
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        query = (
+            select(User, Role.name, UserRoleAssignment.scope_type, UserRoleAssignment.scope_id)
+            .join(UserRoleAssignment, UserRoleAssignment.user_id == User.id)
+            .join(Role, Role.id == UserRoleAssignment.role_id)
+            .where(User.organization_id == org.id)
+            .order_by(User.email, Role.name)
+        )
+        if args.email:
+            query = query.where(func.lower(User.email) == args.email.strip().lower())
+        rows = (await db.execute(query)).all()
+        if not rows:
+            print("No role assignments.")
+        for user, role, scope_type, scope_id in rows:
+            if scope_type == ScopeType.organization:
+                where = "whole organization"
+            elif scope_type == ScopeType.course_offering:
+                offering = await db.get(CourseOffering, scope_id)
+                template = offering and await db.get(CourseTemplate, offering.course_template_id)
+                where = f"offering {template.code if template else '?'} {offering.term if offering else scope_id}"
+            else:
+                thing = await db.get(names[scope_type], scope_id)
+                where = f"{scope_type.value.replace('_template', '').replace('_', ' ')} {thing.name if thing else scope_id}"
+            print(f"{user.email or user.display_name:40} {role:14} {where}")
 
 
 async def configure_source(args: argparse.Namespace) -> None:
@@ -301,8 +420,24 @@ def main() -> None:
     p.add_argument("--org", required=True, help="Organization slug, e.g. demo")
     p.add_argument("--email", required=True)
     p.add_argument("--name", required=True, help="Display name")
-    p.add_argument("--admin", action="store_true", help="Make the user a system administrator")
+    p.add_argument("--admin", action="store_true",
+                   help="System administrator: operates this installation and bypasses all permission checks")
+    p.add_argument("--role", choices=ROLE_CHOICES, help="Give a role for the whole organization")
     p.add_argument("--password-stdin", action="store_true", help="Read the password from stdin")
+
+    for name, help_text in (("grant-role", "Give someone a role"), ("revoke-role", "Take a role away")):
+        p = sub.add_parser(name, help=help_text)
+        p.add_argument("--org", required=True)
+        p.add_argument("--email", required=True)
+        p.add_argument("--role", required=True, choices=ROLE_CHOICES)
+        where = p.add_mutually_exclusive_group()
+        where.add_argument("--college", help="Scope: a college (code or name); default is the whole organization")
+        where.add_argument("--department", help="Scope: a department (code or name)")
+        where.add_argument("--course", help="Scope: a course (code or name)")
+
+    p = sub.add_parser("roles", help="Show who has which roles")
+    p.add_argument("--org", required=True)
+    p.add_argument("--email")
 
     p = sub.add_parser("register-lti-platform", help="Register an LMS for LTI 1.3 launches")
     p.add_argument("--org", required=True, help="Organization slug the LMS belongs to")
@@ -350,6 +485,12 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "create-user":
         asyncio.run(create_user(args))
+    elif args.command == "grant-role":
+        asyncio.run(grant_role(args))
+    elif args.command == "revoke-role":
+        asyncio.run(revoke_role(args))
+    elif args.command == "roles":
+        asyncio.run(list_roles(args))
     elif args.command == "register-lti-platform":
         asyncio.run(register_lti_platform(args))
     elif args.command == "configure-source":

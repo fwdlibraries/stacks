@@ -28,6 +28,7 @@ from app.schemas.ingest import (
 )
 from app.schemas.lists import StaffCitation
 from app.services import lists_service as svc
+from app.services.access import load_grants
 from app.services.credentials import CredentialError
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,9 @@ async def resolve_context(
     db: AsyncSession = Depends(get_db),
     http: httpx.AsyncClient = Depends(get_http_client),
 ) -> ResolveContext:
+    # Lookups spend the organization's library API quota: only for people who edit lists
+    if not (await load_grants(db, current_user)).anywhere("lists.edit"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have permission to add citations")
     try:
         sources = await load_sources(db, current_user.organization_id)
     except CredentialError:
@@ -119,7 +123,7 @@ async def create_from_source(
     Citations from the library's system (Alma) stay bound to their record: their
     bibliographic fields are read-only and kept in sync.
     """
-    section = await svc.get_section(db, current_user, section_id)
+    section = await svc.get_section(db, current_user, section_id, need="lists.edit")
     if body.source_system not in BY_SYSTEM:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown source: {body.source_system}")
     try:

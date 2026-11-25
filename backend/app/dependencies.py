@@ -64,24 +64,21 @@ async def get_current_admin(current_user=Depends(get_current_user)):
 
 
 def require_permission(permission_code: str):
-    """
-    Dependency factory for permission-based authorization.
+    """Dependency factory: the user must hold the permission organization-wide.
+
+    For resources inside the organization (lists, sections, citations), check the
+    resource's scope instead: lists_service.get_list(..., need=...).
 
     Usage:
-        @router.post("/lists")
-        async def create_list(
-            user = Depends(require_permission("list:create"))
-        ):
+        @router.put("/settings/...")
+        async def update(user = Depends(require_permission("settings.manage"))): ...
     """
     async def _check(
         current_user=Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ):
-        from app.services.auth_service import AuthService
-        has_perm = await AuthService.user_has_permission(
-            current_user, permission_code, db
-        )
-        if not has_perm:
+        from app.services.access import load_grants
+        if not (await load_grants(db, current_user)).organization_wide(permission_code):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission required: {permission_code}",
