@@ -22,9 +22,10 @@ TYPES = {
 }
 
 
-def user_agent() -> str:
+def user_agent(ctx: ResolveContext | None = None) -> str:
     # Crossref asks for a contact address (its "polite pool"); only send one if configured
-    contact = f"; mailto:{settings.metadata_contact_email}" if settings.metadata_contact_email else ""
+    email = (ctx and ctx.contact_email) or settings.metadata_contact_email
+    contact = f"; mailto:{email}" if email else ""
     return f"Stacks/0.1 (https://github.com/fwdlibraries/stacks{contact})"
 
 
@@ -84,7 +85,7 @@ class CrossrefResolver(Resolver):
         if normalize_doi(source_identifier) != source_identifier.lower() or ".." in source_identifier:
             return None
         data = await get_json(
-            ctx, "Crossref", API + quote(source_identifier, safe="/"), headers={"User-Agent": user_agent()}
+            ctx, "Crossref", API + quote(source_identifier, safe="/"), headers={"User-Agent": user_agent(ctx)}
         )
         work = (data or {}).get("message")
         if not work:
@@ -128,7 +129,7 @@ async def _search(text: str, ctx: ResolveContext, rows: int) -> list[Candidate]:
         API.rstrip("/"),
         params={"query.bibliographic": text[:500], "rows": rows, "select": "DOI,type,title,subtitle,author,editor,"
                 "container-title,publisher,volume,issue,page,ISSN,ISBN,published-print,published-online,issued"},
-        headers={"User-Agent": user_agent()},
+        headers={"User-Agent": user_agent(ctx)},
     )
     items = ((data or {}).get("message") or {}).get("items") or []
     return [

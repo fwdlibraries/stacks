@@ -19,6 +19,7 @@ from app.schemas.auth import (
     RefreshRequest,
     TokenResponse,
 )
+from app.services import tenancy
 from app.services.auth_service import AuthService
 from app.services.ephemeral import EphemeralStore, get_ephemeral_store
 
@@ -43,6 +44,7 @@ async def local_login(
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
     store: EphemeralStore = Depends(get_ephemeral_store),
+    tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant),
 ):
     """Authenticate with email and password. Returns access + refresh tokens.
 
@@ -59,7 +61,9 @@ async def local_login(
             detail=f"Too many failed sign-in attempts. Try again in {settings.login_lockout_minutes} minutes.",
             headers={"Retry-After": str(window)},
         )
-    user = await AuthService.authenticate(body.email, body.password, db)
+    # On an organization's own hostname, only its users can sign in there
+    org_id = tenant.organization_id if tenant and tenant.by_domain else None
+    user = await AuthService.authenticate(body.email, body.password, db, org_id)
     if user is None:
         await store.incr(key, window)
         raise HTTPException(

@@ -62,10 +62,33 @@ class Organization(Base):
     lti_issuer: Mapped[str | None] = mapped_column(Text)
     ai_settings: Mapped[dict] = mapped_column(JSONB, default={"enabled": False, "provider": None, "features": []})
     link_resolver_settings: Mapped[dict] = mapped_column(JSONB, default={})
+    # Per-organization settings (app/services/tenancy.py OrgSettings): LMS origins
+    # allowed to frame Stacks, contact address for open metadata APIs, ...
+    settings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}", default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     colleges: Mapped[list["College"]] = relationship(back_populates="organization")
     users: Mapped[list["User"]] = relationship(back_populates="organization")
+    domains: Mapped[list["OrganizationDomain"]] = relationship(back_populates="organization")
+
+
+class OrganizationDomain(Base):
+    """A hostname that serves an organization (e.g. stacks.library.example.edu).
+
+    Requests are attributed to an organization by their Host header. The primary
+    domain is the organization's public address: LTI redirect URIs and tool URLs
+    are built from it."""
+    __tablename__ = "organization_domains"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    hostname: Mapped[str] = mapped_column(Text, unique=True, nullable=False)  # lowercase, no port
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    organization: Mapped[Organization] = relationship(back_populates="domains")
 
 
 class College(Base):

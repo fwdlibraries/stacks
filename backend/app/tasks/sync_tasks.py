@@ -8,8 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.ingest.resolvers import ResolveContext
-from app.ingest.sources import load_sources
+from app.ingest.sources import context_for
 from app.ingest.sync import sync_organization
 from app.models.models import LibrarySource
 from app.services.credentials import CredentialError
@@ -48,11 +47,11 @@ async def _sync_all() -> dict:
             for org_id in org_ids:
                 async with sessions() as db:
                     try:
-                        sources = await load_sources(db, org_id)
+                        ctx = await context_for(db, org_id, http)
                     except CredentialError:
                         logger.exception("Alma key for org %s can't be decrypted; skipping sync", org_id)
                         continue
-                    report = await sync_organization(db, org_id, ResolveContext(http=http, sources=sources))
+                    report = await sync_organization(db, org_id, ctx)
                     await db.commit()
                     results[str(org_id)] = report.__dict__
     finally:

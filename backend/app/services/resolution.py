@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings as app_settings
 from app.ingest.sources import AlmaConfig, LibKeyConfig, PrimoConfig
 from app.models.models import Citation, LibrarySource, Organization
-from app.services import credentials, links
+from app.services import credentials, links, tenancy
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ class ResolutionContext:
     link_settings: links.LinkSettings | None = None
     alma: AlmaResolver | None = None
     libkey: LibKey | None = None
+    contact_email: str | None = None
     # Changes when any setting changes, so cached links are dropped with it
     fingerprint: str = ""
 
@@ -98,6 +99,7 @@ async def load_context(db: AsyncSession, organization_id: uuid.UUID) -> Resoluti
         select(Organization.link_resolver_settings).where(Organization.id == organization_id)
     )
     config = ResolutionConfig.model_validate(org_settings or {})
+    tenant = await tenancy.tenant_for_org(db, organization_id)
     rows = {
         row.kind: row
         for row in await db.scalars(
@@ -106,7 +108,7 @@ async def load_context(db: AsyncSession, organization_id: uuid.UUID) -> Resoluti
             )
         )
     }
-    ctx = ResolutionContext(config=config)
+    ctx = ResolutionContext(config=config, contact_email=tenant.contact_email if tenant else None)
 
     primo = None
     if row := rows.get("primo"):
@@ -215,7 +217,8 @@ async def _alma(citation: Citation, ctx: ResolutionContext, http: httpx.AsyncCli
 async def _open_access(citation: Citation, ctx: ResolutionContext, http: httpx.AsyncClient) -> Resolution | None:
     if not citation.doi:
         return None
-    params = {"mailto": app_settings.metadata_contact_email} if app_settings.metadata_contact_email else {}
+    email = ctx.contact_email or app_settings.metadata_contact_email
+    params = {"mailto": email} if email else {}
     resp = await http.get(f"https://api.openalex.org/works/doi:{quote(citation.doi, safe='/')}", params=params)
     if resp.status_code == 404:
         return None

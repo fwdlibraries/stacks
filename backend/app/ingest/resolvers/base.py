@@ -13,6 +13,8 @@ from app.ingest.sources import Source
 class ResolveContext:
     http: httpx.AsyncClient
     sources: dict[str, Source] = field(default_factory=dict)
+    # Contact address for open metadata APIs (the organization's, else the installation's)
+    contact_email: str | None = None
     # Per-source concurrency limits, created on first use (per context, so per event loop)
     _limits: dict[str, asyncio.Semaphore] = field(default_factory=dict, repr=False)
 

@@ -135,7 +135,7 @@ async def _match_bulk_import(job_id: str) -> None:
     from app.config import settings
     from app.ingest.bulk import run_matching
     from app.ingest.resolvers import ResolveContext
-    from app.ingest.sources import load_sources
+    from app.ingest.sources import context_for
     from app.models.models import BackgroundJob
     from app.services.credentials import CredentialError
 
@@ -146,14 +146,14 @@ async def _match_bulk_import(job_id: str) -> None:
             job = await db.get(BackgroundJob, uuid.UUID(job_id))
             if job is None:
                 return
-            try:
-                sources = await load_sources(db, uuid.UUID(job.payload["organization_id"]))
-            except CredentialError:
-                logger.exception("Library source keys can't be decrypted; matching with open sources only")
-                sources = {}
             async with httpx.AsyncClient(timeout=20.0) as http:
                 try:
-                    await run_matching(db, job.id, ResolveContext(http=http, sources=sources))
+                    ctx = await context_for(db, uuid.UUID(job.payload["organization_id"]), http)
+                except CredentialError:
+                    logger.exception("Library source keys can't be decrypted; matching with open sources only")
+                    ctx = ResolveContext(http=http)
+                try:
+                    await run_matching(db, job.id, ctx)
                 except Exception as exc:
                     logger.exception("Bulk import %s failed", job_id)
                     await db.rollback()

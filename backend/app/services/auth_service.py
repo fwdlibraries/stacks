@@ -104,16 +104,18 @@ class AuthService:
     # ── Login ────────────────────────────────────────────────────────────────
 
     @staticmethod
-    async def authenticate(email: str, password: str, db: AsyncSession) -> User | None:
-        """Return the active local user for these credentials, or None."""
-        candidates = (
-            await db.scalars(
-                select(User).where(
-                    func.lower(User.email) == email.strip().lower(),
-                    User.password_hash.is_not(None),
-                )
-            )
-        ).all()
+    async def authenticate(
+        email: str, password: str, db: AsyncSession, organization_id: uuid.UUID | None = None
+    ) -> User | None:
+        """Return the active local user for these credentials, or None.
+
+        `organization_id` (from the request's hostname) limits sign-in to that
+        organization's users, so the same email can exist at several schools.
+        """
+        query = select(User).where(func.lower(User.email) == email.strip().lower(), User.password_hash.is_not(None))
+        if organization_id is not None:
+            query = query.where(User.organization_id == organization_id)
+        candidates = (await db.scalars(query)).all()
         if len(candidates) > 1:
             # Emails aren't unique across organizations; refuse rather than guess
             logger.warning("Local login matched %d users for one email; refusing", len(candidates))

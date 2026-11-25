@@ -42,7 +42,14 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:5173"
     # LMS origins allowed to show Stacks in an iframe (space-separated), e.g.
     # "https://lms.example.edu https://*.instructure.com". Empty: same-origin only.
+    # Default for organizations that haven't set their own (organizations.settings).
     frame_ancestors: str = ""
+
+    # Multi-tenancy. Requests are attributed to an organization by hostname
+    # (organization_domains). Hosts that match none use DEFAULT_ORGANIZATION (a slug),
+    # if set; with REQUIRE_KNOWN_HOST they're refused instead (hosted, multi-tenant).
+    default_organization: str = ""
+    require_known_host: bool = False
 
     # Encrypts stored credentials such as library API keys (Fernet key, see
     # `python -m app.cli generate-credentials-key`). Empty: derived from SECRET_KEY,

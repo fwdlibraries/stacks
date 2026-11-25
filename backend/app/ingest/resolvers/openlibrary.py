@@ -42,7 +42,7 @@ class OpenLibraryResolver(Resolver):
             "Open Library",
             API,
             params={"bibkeys": key, "format": "json", "jscmd": "data"},
-            headers={"User-Agent": user_agent()},
+            headers={"User-Agent": user_agent(ctx)},
         )
         book = (data or {}).get(key)
         if not book:
