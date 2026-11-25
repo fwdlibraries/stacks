@@ -19,6 +19,7 @@ from app.routers import (
     lti,
     orgs,
     public,
+    tenant,
     users,
 )
 
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
 
     # Unauthenticated student list view
     app.include_router(public.router,    prefix="/api/v1/public",    tags=["Public"])
+    app.include_router(tenant.router,    prefix="/api/v1/tenant",    tags=["Public"])
 
     return app
 

@@ -2,7 +2,7 @@
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import LibrarySource
 from app.services import credentials
+
+if TYPE_CHECKING:
+    from app.ingest.resolvers.base import ResolveContext
 
 # Ex Libris API gateways (developers.exlibrisgroup.com: "API gateway by region")
 EXLIBRIS_GATEWAYS = {
@@ -115,3 +118,16 @@ async def load_sources(db: AsyncSession, organization_id: uuid.UUID) -> dict[str
             api_key=credentials.decrypt(row.api_key_encrypted),
         )
     return sources
+
+
+async def context_for(db: AsyncSession, organization_id: uuid.UUID, http) -> "ResolveContext":
+    """A lookup context for an organization: its library sources and contact address."""
+    from app.ingest.resolvers.base import ResolveContext
+    from app.services.tenancy import tenant_for_org
+
+    tenant = await tenant_for_org(db, organization_id)
+    return ResolveContext(
+        http=http,
+        sources=await load_sources(db, organization_id),
+        contact_email=tenant.contact_email if tenant else None,
+    )

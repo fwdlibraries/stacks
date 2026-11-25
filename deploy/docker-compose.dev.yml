@@ -91,8 +91,6 @@ services:
       context: ../frontend
       target: prod
     profiles: ["tunnel"]
-    environment:
-      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
     restart: unless-stopped
     networks:
       - stacks

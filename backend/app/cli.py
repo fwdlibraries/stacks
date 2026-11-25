@@ -12,6 +12,9 @@
         --vid 01ABC_INST:MAIN --discovery-url https://abc.primo.exlibrisgroup.com [--tab ... --scope ...]
     python -m app.cli configure-source --org demo --kind libkey --library-id 1234
     python -m app.cli list-sources --org demo
+    python -m app.cli configure-org --org demo --add-domain stacks.example.edu --primary stacks.example.edu \
+        --lms-origin https://lms.example.edu [--contact-email library@example.edu]
+    python -m app.cli show-org --org demo
     python -m app.cli sync-catalogue --org demo [--limit 1000]
     python -m app.cli configure-links --org demo --stack libkey,alma,open_access [--cache-hours 6] [--timeout 2.5]
     python -m app.cli lookup --org demo "10.1000/xyz 978-0-14-044913-6"
@@ -32,7 +35,6 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import func, or_, select
 
-from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.models import (
     IdentityProvider,
@@ -152,7 +154,10 @@ async def register_lti_platform(args: argparse.Namespace) -> None:
                 print(f"  deployment {deployment_id}: added")
         await db.commit()
 
-    base = settings.public_base_url.rstrip("/")
+    from app.services.tenancy import tenant_for_org
+
+    async with AsyncSessionLocal() as db:
+        base = (await tenant_for_org(db, org.id)).base_url
     print(
         "\nEnter these in the LMS tool registration:\n"
         f"  OIDC login initiation URL:  {base}/lti/login\n"
@@ -358,8 +363,7 @@ async def configure_links(args: argparse.Namespace) -> None:
 async def sync_catalogue(args: argparse.Namespace) -> None:
     import httpx
 
-    from app.ingest.resolvers import ResolveContext
-    from app.ingest.sources import load_sources
+    from app.ingest.sources import context_for, load_sources
     from app.ingest.sync import sync_organization
 
     async with AsyncSessionLocal() as db:
@@ -368,7 +372,7 @@ async def sync_catalogue(args: argparse.Namespace) -> None:
         if "alma" not in sources:
             sys.exit(f"'{org.name}' has no active Alma source; see configure-source.")
         async with httpx.AsyncClient(timeout=30.0) as http:
-            report = await sync_organization(db, org.id, ResolveContext(http=http, sources=sources), limit=args.limit)
+            report = await sync_organization(db, org.id, await context_for(db, org.id, http), limit=args.limit)
         await db.commit()
     print(
         f"Checked {report.checked}: {report.updated} updated, {report.unchanged} unchanged, "
@@ -376,6 +380,79 @@ async def sync_catalogue(args: argparse.Namespace) -> None:
     )
     for error in report.errors:
         print("Error:", error)
+
+
+async def configure_org(args: argparse.Namespace) -> None:
+    from pydantic import ValidationError
+
+    from app.models.models import OrganizationDomain
+    from app.services.tenancy import OrgSettings, normalize_host, tenant_for_org
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        for raw in args.add_domain or []:
+            host = normalize_host(raw)
+            if not host:
+                sys.exit(f"'{raw}' isn't a hostname (e.g. stacks.library.example.edu).")
+            taken = await db.scalar(select(OrganizationDomain).where(OrganizationDomain.hostname == host))
+            if taken and taken.organization_id != org.id:
+                sys.exit(f"{host} already belongs to another organization.")
+            if not taken:
+                db.add(OrganizationDomain(organization_id=org.id, hostname=host))
+                await db.flush()
+        if args.primary:
+            host = normalize_host(args.primary)
+            domains = list(await db.scalars(select(OrganizationDomain).where(OrganizationDomain.organization_id == org.id)))
+            if host not in {d.hostname for d in domains}:
+                sys.exit(f"{args.primary} isn't one of {org.name}'s domains; add it with --add-domain first.")
+            for domain in domains:
+                domain.is_primary = domain.hostname == host
+        for raw in args.remove_domain or []:
+            domain = await db.scalar(
+                select(OrganizationDomain).where(
+                    OrganizationDomain.organization_id == org.id, OrganizationDomain.hostname == normalize_host(raw)
+                )
+            )
+            if domain:
+                await db.delete(domain)
+
+        current = dict(org.settings or {})
+        if args.lms_origin is not None:
+            current["frame_ancestors"] = [o for o in args.lms_origin if o] or []
+        if args.clear_lms_origins:
+            current.pop("frame_ancestors", None)
+        if args.contact_email is not None:
+            current["metadata_contact_email"] = args.contact_email or None
+        try:
+            org.settings = OrgSettings.model_validate(current).model_dump(exclude_none=True)
+        except ValidationError as exc:
+            sys.exit(f"Invalid settings:\n{exc}")
+        await db.commit()
+        await show_org_details(db, org, tenant_for_org)
+
+
+async def show_org_details(db, org: Organization, tenant_for_org) -> None:
+    from app.models.models import OrganizationDomain
+
+    tenant = await tenant_for_org(db, org.id)
+    domains = list(await db.scalars(
+        select(OrganizationDomain).where(OrganizationDomain.organization_id == org.id).order_by(OrganizationDomain.hostname)
+    ))
+    print(f"{org.name} ({org.slug})")
+    print("  Domains:      " + (", ".join(d.hostname + (" (primary)" if d.is_primary else "") for d in domains) or "none"))
+    print(f"  Address:      {tenant.base_url}" + ("" if tenant.primary_host else "  (PUBLIC_BASE_URL: no domain yet)"))
+    own = tenant.settings.frame_ancestors is not None
+    print("  LMS origins:  " + (" ".join(tenant.frame_ancestors) or "none") + ("" if own else "  (FRAME_ANCESTORS default)"))
+    print(f"  Contact:      {tenant.contact_email or 'none'}"
+          + ("" if tenant.settings.metadata_contact_email else "  (METADATA_CONTACT_EMAIL default)"))
+
+
+async def show_org(args: argparse.Namespace) -> None:
+    from app.services.tenancy import tenant_for_org
+
+    async with AsyncSessionLocal() as db:
+        org = await _get_org(db, args.org)
+        await show_org_details(db, org, tenant_for_org)
 
 
 async def list_sources(args: argparse.Namespace) -> None:
@@ -393,14 +470,15 @@ async def lookup(args: argparse.Namespace) -> None:
     import httpx
 
     from app.ingest import pipeline
-    from app.ingest.resolvers import ResolveContext
-    from app.ingest.sources import load_sources
+    from app.ingest.sources import context_for, load_sources
 
     async with AsyncSessionLocal() as db:
         org = await _get_org(db, args.org)
         sources = await load_sources(db, org.id)
     async with httpx.AsyncClient(timeout=15.0) as http:
-        result = await pipeline.lookup(args.query, ResolveContext(http=http, sources=sources))
+        async with AsyncSessionLocal() as db:
+            ctx = await context_for(db, org.id, http)
+        result = await pipeline.lookup(args.query, ctx)
     print("Sources:", ", ".join(sources) or "none configured (open sources only)")
     print("Identifiers:", ", ".join(f"{i.kind}={i.value}" for i in result.identifiers) or "none found")
     for warning in result.warnings:
@@ -473,6 +551,19 @@ def main() -> None:
     p.add_argument("--org", required=True)
     p.add_argument("--limit", type=int, default=1000, help="Citations to check, oldest-checked first")
 
+    p = sub.add_parser("configure-org", help="An organization's domains and settings")
+    p.add_argument("--org", required=True)
+    p.add_argument("--add-domain", action="append", help="Hostname that serves this organization (repeatable)")
+    p.add_argument("--remove-domain", action="append", help="Stop serving this organization at a hostname")
+    p.add_argument("--primary", help="The domain that is its public address (LTI URLs are built from it)")
+    p.add_argument("--lms-origin", action="append",
+                   help="LMS origin allowed to show Stacks in a frame (repeatable; replaces the list)")
+    p.add_argument("--clear-lms-origins", action="store_true", help="Use the FRAME_ANCESTORS default again")
+    p.add_argument("--contact-email", help="Contact address for Crossref/OpenAlex ('' to use the default)")
+
+    p = sub.add_parser("show-org", help="Show an organization's domains and settings")
+    p.add_argument("--org", required=True)
+
     p = sub.add_parser("list-sources", help="Show an organization's library sources (never the keys)")
     p.add_argument("--org", required=True)
 
@@ -499,6 +590,10 @@ def main() -> None:
         asyncio.run(configure_links(args))
     elif args.command == "sync-catalogue":
         asyncio.run(sync_catalogue(args))
+    elif args.command == "configure-org":
+        asyncio.run(configure_org(args))
+    elif args.command == "show-org":
+        asyncio.run(show_org(args))
     elif args.command == "list-sources":
         asyncio.run(list_sources(args))
     elif args.command == "lookup":

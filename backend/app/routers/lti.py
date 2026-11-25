@@ -16,10 +16,9 @@ from jwt.algorithms import RSAAlgorithm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import get_db
 from app.models.models import LtiPlatform, ScopeType
-from app.services import access
+from app.services import access, tenancy
 from app.services import lti_service as lti
 from app.services.ephemeral import EphemeralStore, get_ephemeral_store
 
@@ -30,11 +29,20 @@ STATE_TTL_SECONDS = 300
 LOGIN_CODE_TTL_SECONDS = 60
 
 
-def launch_url() -> str:
-    return f"{settings.public_base_url.rstrip('/')}/lti/launch"
+def launch_url(tenant: tenancy.Tenant | None = None) -> str:
+    """The redirect URI registered with the LMS: the organization's address + /lti/launch."""
+    return f"{tenancy.base_url(tenant)}/lti/launch"
 
 
-def _error_page(message: str, status_code: int = 400) -> HTMLResponse:
+def _wrong_site(host_tenant: tenancy.Tenant | None, organization_id) -> bool:
+    """A launch arriving at another organization's hostname."""
+    return bool(host_tenant and host_tenant.by_domain and host_tenant.organization_id != organization_id)
+
+
+WRONG_SITE = "This LMS is registered with a different Stacks site. Check the tool's URLs in your LMS."
+
+
+def _error_page(message: str, status_code: int = 400, tenant: tenancy.Tenant | None = None) -> HTMLResponse:
     """Plain page shown inside the LMS frame when a launch can't proceed."""
     body = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Stacks</title>
@@ -45,7 +53,10 @@ def _error_page(message: str, status_code: int = 400) -> HTMLResponse:
   h1 {{ font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 1.5625rem; }}
 </style></head>
 <body><main><h1>Stacks couldn't open</h1><p>{html.escape(message)}</p></main></body></html>"""
-    return HTMLResponse(body, status_code=status_code)
+    # Shown inside the LMS frame: allow the organization's LMS origins
+    return HTMLResponse(
+        body, status_code=status_code, headers={"Content-Security-Policy": tenancy.frame_policy(tenant)}
+    )
 
 
 async def _params(request: Request) -> dict:
@@ -60,6 +71,7 @@ async def lti_login(
     request: Request,
     db: AsyncSession = Depends(get_db),
     store: EphemeralStore = Depends(get_ephemeral_store),
+    host_tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant),
 ):
     """
     Step 1 of the LTI 1.3 launch: store a single-use state and nonce, then send the
@@ -70,14 +82,17 @@ async def lti_login(
         platform = await lti.find_platform(db, params.get("iss"), params.get("client_id"))
         if not params.get("login_hint"):
             raise lti.LaunchError("The LMS login request is missing login_hint.")
+        if _wrong_site(host_tenant, platform.organization_id):
+            raise lti.LaunchError(WRONG_SITE)
     except lti.LaunchError as exc:
-        return _error_page(str(exc))
+        return _error_page(str(exc), tenant=host_tenant)
+    tenant = await tenancy.tenant_for_org(db, platform.organization_id)
 
     state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
     await store.put(f"lti:state:{state}", {"nonce": nonce, "platform_id": str(platform.id)}, STATE_TTL_SECONDS)
     url = lti.auth_request_url(
         platform,
-        redirect_uri=launch_url(),
+        redirect_uri=launch_url(tenant),
         login_hint=params["login_hint"],
         lti_message_hint=params.get("lti_message_hint"),
         state=state,
@@ -91,6 +106,7 @@ async def lti_launch(
     request: Request,
     db: AsyncSession = Depends(get_db),
     store: EphemeralStore = Depends(get_ephemeral_store),
+    host_tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant),
 ):
     """
     Step 3 of the LTI 1.3 launch: validate the id_token, then
@@ -112,6 +128,8 @@ async def lti_launch(
         claims = await lti.validate_id_token(str(id_token), platform, record["nonce"])
         deployment = await lti.find_deployment(db, platform, claims)
         organization_id = deployment.organization_id or platform.organization_id
+        if _wrong_site(host_tenant, organization_id):
+            raise lti.LaunchError(WRONG_SITE)
 
         lti.require_context(claims)  # before anything is created
 
@@ -139,7 +157,7 @@ async def lti_launch(
         # The error page is a normal response, so get_db would commit: undo partial work
         await db.rollback()
         logger.info("LTI launch refused: %s", exc)
-        return _error_page(str(exc))
+        return _error_page(str(exc), tenant=host_tenant)
 
 
 @router.get("/jwks", summary="Tool public JWKS endpoint")

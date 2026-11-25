@@ -16,7 +16,7 @@ from app.models.models import (
     ReadingList,
 )
 from app.schemas.public import PublicReadingList
-from app.services import links
+from app.services import links, tenancy
 
 router = APIRouter()
 
@@ -36,6 +36,7 @@ async def get_public_list(
     term: str,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant),
 ):
     """
     Resolve organization → course (code, case-insensitive) → offering (term) →
@@ -45,6 +46,9 @@ async def get_public_list(
     Unpublished lists return only their title and `is_published: false`, so the
     student view can say "not published yet" without exposing draft content.
     """
+    # An organization's own hostname serves only its lists
+    if tenant and tenant.by_domain and tenant.slug.lower() != org_slug.lower():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Reading list not found")
     offering = await db.scalar(
         select(CourseOffering)
         .join(CourseOffering.template)

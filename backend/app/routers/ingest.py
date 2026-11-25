@@ -14,7 +14,7 @@ from app.ingest import pipeline
 from app.ingest.candidate import Candidate, SourceError
 from app.ingest.fields import UnusableRecord, citation_fields
 from app.ingest.resolvers import BY_SYSTEM, ResolveContext, primo
-from app.ingest.sources import load_sources
+from app.ingest.sources import context_for
 from app.models.models import Citation, User
 from app.schemas.ingest import (
     CandidateOut,
@@ -50,12 +50,11 @@ async def resolve_context(
     if not (await load_grants(db, current_user)).anywhere("lists.edit"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have permission to add citations")
     try:
-        sources = await load_sources(db, current_user.organization_id)
+        return await context_for(db, current_user.organization_id, http)
     except CredentialError:
         # Lookups still work through open sources; admins see the reason in the log
         logger.exception("Library source credentials for org %s can't be decrypted", current_user.organization_id)
-        sources = {}
-    return ResolveContext(http=http, sources=sources)
+        return ResolveContext(http=http)
 
 
 def _candidate_out(candidate: Candidate) -> CandidateOut:
