@@ -179,6 +179,19 @@ async def test_first_instructor_launch_provisions_course_and_signs_in(
     assert (lists.json()[0]["can_edit"], lists.json()[0]["can_publish"]) == (True, True)
 
 
+async def test_launch_records_which_lms_it_came_from(client: AsyncClient, db_session: AsyncSession, platform, store):
+    from app.services.lti_service import CLAIM_TOOL_PLATFORM
+
+    def with_family(nonce):
+        claims = claims_for(nonce)
+        claims[CLAIM_TOOL_PLATFORM] = {"product_family_code": "desire2learn", "guid": "x"}
+        return claims
+
+    await exchange(client, await launch(client, claims_fn=with_family))
+    await db_session.refresh(platform)
+    assert platform.product_family == "brightspace"
+
+
 async def test_repeat_launches_reuse_course_list_and_user(client: AsyncClient, db_session: AsyncSession, platform, store):
     first = await exchange(client, await launch(client))
     second = await exchange(client, await launch(client))

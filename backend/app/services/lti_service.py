@@ -38,6 +38,11 @@ CLAIM_CONTEXT = LTI_CLAIM + "context"
 CLAIM_RESOURCE_LINK = LTI_CLAIM + "resource_link"
 CLAIM_ROLES = LTI_CLAIM + "roles"
 CLAIM_CUSTOM = LTI_CLAIM + "custom"
+CLAIM_TOOL_PLATFORM = LTI_CLAIM + "tool_platform"
+
+# tool_platform.product_family_code → the LMS look Stacks can match
+PRODUCT_FAMILIES = {"desire2learn": "brightspace", "brightspace": "brightspace", "d2l": "brightspace",
+                    "canvas": "canvas", "moodle": "moodle"}
 
 RESOURCE_LINK_REQUEST = "LtiResourceLinkRequest"
 
@@ -357,3 +362,9 @@ def generate_tool_keys() -> tuple[str, str]:
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
     ).decode()
     return private_pem, public_pem
+
+
+def product_family(claims: dict) -> str | None:
+    """Which LMS sent this launch, as Stacks names it (None if it doesn't say)."""
+    code = str((claims.get(CLAIM_TOOL_PLATFORM) or {}).get("product_family_code") or "").strip().lower()
+    return PRODUCT_FAMILIES.get(code, code or None)

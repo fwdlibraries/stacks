@@ -429,8 +429,9 @@ class ThemeOut(theme.ThemeSettings):
     has_logo: bool
     warnings: list[str]  # contrast problems with the colors in effect
     fonts: list[FontOption]
-    # LMS presets not yet available (waiting on the vendors' style guides)
-    lms_presets_ready: bool = False
+    lms_presets_ready: bool = True
+    # The LMS this organization launches from, as 'auto' would match it (None: unknown yet)
+    detected_lms: str | None = None
 
 
 class ThemePreview(BaseModel):
@@ -455,12 +456,14 @@ async def _theme_out(db: AsyncSession, user: User) -> ThemeOut:
     org = await db.get(Organization, user.organization_id)
     stored = (org.settings or {})
     settings_ = theme.ThemeSettings.model_validate(stored.get("theme") or {})
-    tokens = theme.effective_tokens(settings_)
+    detected = await tenancy.lms_family(db, user.organization_id)
+    tokens = theme.effective_tokens(settings_, detected)
     return ThemeOut(
         **settings_.model_dump(),
         has_logo=bool(stored.get("logo")),
         warnings=theme.contrast_warnings(tokens) if tokens else [],
         fonts=[FontOption(key=k, label=label) for k, (label, _) in theme.FONTS.items()],
+        detected_lms=detected,
     )
 
 
@@ -482,18 +485,19 @@ async def save_theme(body: dict, user: User = Depends(manage_settings), db: Asyn
 
 
 @router.post("/theme/preview", response_model=ThemePreview, summary="Preview unsaved theme settings")
-async def preview_theme(body: dict, user: User = Depends(manage_settings)):
+async def preview_theme(body: dict, user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
     """CSS for the settings, scoped to an element with class stacks-theme-preview, plus
     contrast warnings. Custom CSS isn't previewed (it applies to the whole site)."""
     try:
         settings_ = theme.ThemeSettings.model_validate(body)
     except ValidationError as exc:
         raise _theme_errors(exc) from exc
-    tokens = theme.effective_tokens(settings_) or theme.ThemeTokens()
-    return ThemePreview(
-        css=theme.tokens_css(tokens, scope=".stacks-theme-preview"),
-        warnings=theme.contrast_warnings(tokens),
+    detected = await tenancy.lms_family(db, user.organization_id)
+    tokens = theme.effective_tokens(settings_, detected) or theme.ThemeTokens()
+    css = theme.theme_css(settings_, detected, scope=".stacks-theme-preview") or theme.tokens_css(
+        tokens, scope=".stacks-theme-preview"
     )
+    return ThemePreview(css=css, warnings=theme.contrast_warnings(tokens))
 
 
 @router.put("/theme/logo", response_model=ThemeOut, summary="Upload a logo")

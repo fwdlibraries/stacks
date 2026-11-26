@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
-from app.models.models import Organization, OrganizationDomain
+from app.models.models import LtiPlatform, Organization, OrganizationDomain
 
 _ORIGIN = re.compile(r"^https?://(\*\.)?[A-Za-z0-9.-]+(:\d{1,5})?$")
 _HOSTNAME = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
@@ -177,3 +177,17 @@ async def get_tenant(request: Request, db: AsyncSession = Depends(get_db)) -> Te
     if tenant is None and settings.require_known_host:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     return tenant
+
+
+async def lms_family(db: AsyncSession, organization_id: uuid.UUID) -> str | None:
+    """The kind of LMS the organization launches Stacks from (for 'match LMS: auto')."""
+    return await db.scalar(
+        select(LtiPlatform.product_family)
+        .where(
+            LtiPlatform.organization_id == organization_id,
+            LtiPlatform.is_active.is_(True),
+            LtiPlatform.product_family.is_not(None),
+        )
+        .order_by(LtiPlatform.created_at.desc())
+        .limit(1)
+    )

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
-import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap'
+import { Alert, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap'
 import {
   usePreviewTheme,
   useRemoveLogo,
@@ -22,7 +22,7 @@ const COLORS: [keyof ThemeTokens, string][] = [
   ['border', 'Borders'],
 ]
 
-const LMS_NAMES = { auto: 'The LMS people launch from', brightspace: 'Brightspace', canvas: 'Canvas', moodle: 'Moodle' }
+const LMS_NAMES: Record<string, string> = { brightspace: 'Brightspace', canvas: 'Canvas', moodle: 'Moodle' }
 
 export default function LookAndFeelView() {
   const theme = useTheme()
@@ -73,7 +73,7 @@ function ThemeForm({ saved }: { saved: ThemeState }) {
           label={<><strong>Standard Stacks</strong><span className="d-block small text-body-secondary">The Stacks look, with your logo if you add one.</span></>} />
         <Form.Check type="radio" id="mode-lms" name="mode" className="mb-2" checked={settings.mode === 'lms'}
           onChange={() => setSettings((s) => ({ ...s, mode: 'lms' }))}
-          label={<><strong>Match your LMS</strong>{!saved.lms_presets_ready && <Badge bg="secondary" className="ms-2">In progress</Badge>}<span className="d-block small text-body-secondary">Looks like Brightspace, Canvas or Moodle, in your institution’s colors, so reading lists feel at home inside courses.</span></>} />
+          label={<><strong>Match your LMS</strong><span className="d-block small text-body-secondary">Looks like Brightspace, Canvas or Moodle, in your institution’s colors, so reading lists feel at home inside courses.</span></>} />
         <Form.Check type="radio" id="mode-custom" name="mode" checked={settings.mode === 'custom'}
           onChange={() => setSettings((s) => ({ ...s, mode: 'custom' }))}
           label={<><strong>Custom</strong><span className="d-block small text-body-secondary">Your own colors, fonts and corners, and optionally your own CSS.</span></>} />
@@ -81,10 +81,10 @@ function ThemeForm({ saved }: { saved: ThemeState }) {
 
       {settings.mode === 'lms' && (
         <Card className="mb-4"><Card.Body>
-          {!saved.lms_presets_ready && (
+          {settings.lms === 'auto' && !saved.detected_lms && (
             <Alert variant="info" className="small">
-              The Brightspace, Canvas and Moodle looks are being added. Until then this uses the Stacks look in your
-              institution’s main color.
+              Stacks doesn’t know which LMS you use yet: it learns from launches. Until then this uses the Stacks
+              look in your institution’s color, or choose your LMS below.
             </Alert>
           )}
           <Row>
@@ -92,13 +92,22 @@ function ThemeForm({ saved }: { saved: ThemeState }) {
               <Form.Group className="mb-3" controlId="lms-which">
                 <Form.Label className="small">LMS</Form.Label>
                 <Form.Select value={settings.lms} onChange={(e) => setSettings((s) => ({ ...s, lms: e.target.value as ThemeSettings['lms'] }))}>
+                  <option value="auto">
+                    Automatic{saved.detected_lms ? ` (${LMS_NAMES[saved.detected_lms] ?? saved.detected_lms})` : ''}
+                  </option>
                   {Object.entries(LMS_NAMES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
             <Col md={6}>
-              <ColorField id="lms-primary" label="Your institution’s main color in the LMS" value={settings.lms_primary ?? '#2C3E5A'}
+              <ColorField id="lms-primary" label="Your institution’s main color in the LMS (optional)"
+                value={settings.lms_primary ?? '#000000'}
                 onChange={(v) => setSettings((s) => ({ ...s, lms_primary: v }))} />
+              {settings.lms_primary && (
+                <Button size="sm" variant="link" className="p-0 mb-3" onClick={() => setSettings((s) => ({ ...s, lms_primary: null }))}>
+                  Use the LMS’s standard color
+                </Button>
+              )}
             </Col>
           </Row>
         </Card.Body></Card>

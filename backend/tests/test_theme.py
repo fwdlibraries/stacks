@@ -45,8 +45,9 @@ def test_contrast():
 
 def test_render_by_mode():
     assert "--bs-primary" not in theme.render_css(theme.ThemeSettings())  # standard: nothing to override
+    # Match LMS with no LMS known yet: the institution's color over the Stacks look
     lms = theme.render_css(theme.ThemeSettings(mode="lms", lms_primary="#006fbf"))
-    assert "--bs-primary: #006FBF;" in lms
+    assert "--bs-primary: #006FBF;" in lms and "Lato" not in lms
     custom = theme.ThemeSettings(mode="custom", tokens=theme.ThemeTokens(primary="#7A1F2B", body_font="system-sans",
                                                                          corners="square"), custom_css=".x{color:red}")
     css = theme.render_css(custom)
@@ -96,7 +97,7 @@ async def test_theme_admin_and_site_stylesheet(client: AsyncClient, db_session, 
     host = {"Host": "stacks.uni.edu"}
 
     state = (await client.get("/api/v1/admin/theme")).json()
-    assert (state["mode"], state["has_logo"], state["lms_presets_ready"]) == ("stacks", False, False)
+    assert (state["mode"], state["has_logo"], state["lms_presets_ready"], state["detected_lms"]) == ("stacks", False, True, None)
     assert {f["key"] for f in state["fonts"]} >= {"stacks-serif", "system-sans"}
 
     standard = await client.get("/api/v1/tenant/theme.css", headers=host)
@@ -153,3 +154,50 @@ async def test_pages_get_a_policy_that_contains_custom_css(client, uni):
     policy = resp.headers["content-security-policy"]
     for part in ("default-src 'self'", "img-src 'self' data:", "font-src 'self' data:", "connect-src 'self'", "object-src 'none'"):
         assert part in policy
+
+
+
+@pytest.mark.parametrize(
+    ("lms", "primary", "font", "marker"),
+    [
+        ("brightspace", "#006FBF", '"Lato"', "--bs-body-font-size: 1.1875rem"),
+        ("canvas", "#2B7ABC", '"Lato"', "outline-offset: 0.25rem"),
+        ("moodle", "#0F6CBF", '"Noto Sans"', "--bs-border-radius: 0.5rem"),
+    ],
+)
+def test_lms_looks(lms, primary, font, marker):
+    css = theme.render_css(theme.ThemeSettings(mode="lms", lms=lms))
+    assert f"--bs-primary: {primary};" in css and font in css and marker in css
+    assert "html .btn-outline-secondary" in css  # Stacks' secondary buttons get the LMS's secondary look
+    assert not theme.css_problems(css)  # nothing loaded from anywhere (fonts are bundled)
+
+
+def test_institution_color_replaces_the_vendors():
+    css = theme.render_css(theme.ThemeSettings(mode="lms", lms="canvas", lms_primary="#7A1F2B"))
+    assert "--bs-primary: #7A1F2B;" in css and "#2B7ABC" not in css
+    assert "--bs-link-color: #0E68B3;" in css  # links keep Canvas's link color
+
+
+def test_auto_follows_the_lms_people_launch_from():
+    auto = theme.ThemeSettings(mode="lms", lms="auto")
+    assert "Noto Sans" in theme.render_css(auto, detected="moodle")
+    assert "--bs-primary" not in theme.render_css(auto, detected=None)  # nothing known: standard look
+    assert "--bs-primary" not in theme.render_css(auto, detected="sakai")  # no look for that LMS
+    assert theme.version(auto, None, "moodle") != theme.version(auto, None, "canvas")
+
+
+def test_presets_meet_contrast():
+    for lms, (preset, _) in theme.PRESETS.items():
+        assert theme.contrast_warnings(preset.tokens) == [], lms
+
+
+async def test_auto_on_the_site(client, db_session, uni):
+    from app.models.models import LtiPlatform
+
+    db_session.add(LtiPlatform(organization_id=uni.id, issuer="https://uni.instructure.com", client_id="c",
+                               auth_login_url="https://x/a", auth_token_url="https://x/t", jwks_url="https://x/j",
+                               tool_private_key="k", tool_public_key="k", tool_key_id="k", product_family="canvas"))
+    uni.settings = {"theme": {"mode": "lms", "lms": "auto"}}
+    await db_session.commit()
+    css = (await client.get("/api/v1/tenant/theme.css", headers={"Host": "stacks.uni.edu"})).text
+    assert "--bs-primary: #2B7ABC;" in css

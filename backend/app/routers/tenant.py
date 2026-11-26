@@ -3,7 +3,9 @@ import base64
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.services import tenancy, theme
 
 router = APIRouter()
@@ -21,26 +23,28 @@ class TenantInfo(BaseModel):
     theme: ThemeInfo = ThemeInfo()
 
 
-def _theme(tenant: tenancy.Tenant | None) -> tuple[theme.ThemeSettings, dict | None]:
+async def _theme(db: AsyncSession, tenant: tenancy.Tenant | None) -> tuple[theme.ThemeSettings, dict | None, str | None]:
+    """The organization's theme settings, logo, and (for 'match LMS: auto') its LMS."""
     if tenant is None:
-        return theme.ThemeSettings(), None
+        return theme.ThemeSettings(), None, None
     try:
         settings = theme.ThemeSettings.model_validate(tenant.settings.theme or {})
     except ValueError:
         settings = theme.ThemeSettings()  # never break pages over a bad stored theme
-    return settings, tenant.settings.logo
+    detected = await tenancy.lms_family(db, tenant.organization_id) if settings.mode == "lms" else None
+    return settings, tenant.settings.logo, detected
 
 
 @router.get("", response_model=TenantInfo, summary="The organization this site serves")
-async def tenant_info(tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant)):
+async def tenant_info(tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant), db: AsyncSession = Depends(get_db)):
     """Public: the name, and theme details, for sign-in and student pages. Empty if none claims the host."""
     if tenant is None:
         return TenantInfo()
-    settings, logo = _theme(tenant)
+    settings, logo, detected = await _theme(db, tenant)
     return TenantInfo(
         name=tenant.name,
         slug=tenant.slug,
-        theme=ThemeInfo(mode=settings.mode, has_logo=bool(logo), version=theme.version(settings, logo)),
+        theme=ThemeInfo(mode=settings.mode, has_logo=bool(logo), version=theme.version(settings, logo, detected)),
     )
 
 
@@ -53,15 +57,19 @@ def _cached(request: Request, etag: str, body: bytes | str, media_type: str) -> 
 
 
 @router.get("/theme.css", summary="This site's theme stylesheet")
-async def theme_css(request: Request, tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant)):
+async def theme_css(
+    request: Request, tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant), db: AsyncSession = Depends(get_db)
+):
     """Overrides for the standard Stacks theme (empty for the standard theme). Loaded by every page."""
-    settings, logo = _theme(tenant)
-    return _cached(request, theme.version(settings, logo), theme.render_css(settings), "text/css")
+    settings, logo, detected = await _theme(db, tenant)
+    return _cached(request, theme.version(settings, logo, detected), theme.render_css(settings, detected), "text/css")
 
 
 @router.get("/logo", summary="This site's logo")
-async def logo(request: Request, tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant)):
-    settings, stored = _theme(tenant)
+async def logo(
+    request: Request, tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant), db: AsyncSession = Depends(get_db)
+):
+    settings, stored, _ = await _theme(db, tenant)
     if not stored:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No logo")
     response = _cached(request, theme.version(settings, stored), base64.b64decode(stored["data"]), stored["content_type"])
