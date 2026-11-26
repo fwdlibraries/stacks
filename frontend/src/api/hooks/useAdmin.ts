@@ -362,3 +362,74 @@ export function useReports() {
 export function useSyncNow() {
   return useMutation({ mutationFn: async () => (await apiClient.post('/admin/sync')).data })
 }
+
+// ── Look and feel ──────────────────────────────────────────────────────────
+
+export interface ThemeTokens {
+  primary: string
+  link: string
+  background: string
+  surface: string
+  text: string
+  border: string
+  heading_font: string
+  body_font: string
+  corners: 'square' | 'standard' | 'rounded'
+}
+
+export interface ThemeSettings {
+  mode: 'stacks' | 'lms' | 'custom'
+  lms: 'auto' | 'brightspace' | 'canvas' | 'moodle'
+  lms_primary: string | null
+  tokens: ThemeTokens
+  custom_css: string
+}
+
+export interface ThemeState extends ThemeSettings {
+  has_logo: boolean
+  warnings: string[]
+  fonts: { key: string; label: string }[]
+  lms_presets_ready: boolean
+}
+
+const THEME = ['admin', 'theme']
+
+export function useTheme() {
+  return useQuery({ queryKey: THEME, queryFn: async () => (await apiClient.get<ThemeState>('/admin/theme')).data })
+}
+
+function useThemeMutation<V>(fn: (vars: V) => Promise<ThemeState>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (data) => {
+      queryClient.setQueryData(THEME, data)
+      queryClient.invalidateQueries({ queryKey: ['tenant'] }) // logo and theme version
+      // Re-load the site stylesheet so the change shows here at once
+      document.querySelectorAll<HTMLLinkElement>('link[href^="/api/v1/tenant/theme.css"]').forEach((link) => {
+        link.href = `/api/v1/tenant/theme.css?t=${Date.now()}`
+      })
+    },
+  })
+}
+
+export function useSaveTheme() {
+  return useThemeMutation(async (input: ThemeSettings) => (await apiClient.put('/admin/theme', input)).data)
+}
+
+export function useUploadLogo() {
+  return useThemeMutation(
+    async (input: { content_type: string; data: string }) => (await apiClient.put('/admin/theme/logo', input)).data
+  )
+}
+
+export function useRemoveLogo() {
+  return useThemeMutation(async () => (await apiClient.delete('/admin/theme/logo')).data)
+}
+
+export function usePreviewTheme() {
+  return useMutation({
+    mutationFn: async (input: ThemeSettings) =>
+      (await apiClient.post<{ css: string; warnings: string[] }>('/admin/theme/preview', input)).data,
+  })
+}

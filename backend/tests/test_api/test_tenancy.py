@@ -42,9 +42,11 @@ def test_normalize_host(raw, expected):
 
 async def test_host_picks_the_organization(client, db_session, two_schools, monkeypatch):
     monkeypatch.setattr(settings, "default_organization", "")
-    assert (await client.get("/api/v1/tenant", headers={"Host": "stacks.alpha.edu"})).json() == {"name": "Alpha College", "slug": "alpha"}
+    alpha = (await client.get("/api/v1/tenant", headers={"Host": "stacks.alpha.edu"})).json()
+    assert (alpha["name"], alpha["slug"], alpha["theme"]["mode"]) == ("Alpha College", "alpha", "stacks")
     assert (await client.get("/api/v1/tenant", headers={"Host": "LISTS.beta.edu:443"})).json()["slug"] == "beta"
-    assert (await client.get("/api/v1/tenant", headers={"Host": "unknown.example"})).json() == {"name": None, "slug": None}
+    unknown = (await client.get("/api/v1/tenant", headers={"Host": "unknown.example"})).json()
+    assert (unknown["name"], unknown["slug"]) == (None, None)
 
 
 async def test_default_organization_and_strict_mode(client, db_session, two_schools, monkeypatch):
@@ -65,7 +67,10 @@ async def test_frame_policy_per_organization(client, db_session, two_schools, mo
     async def policy(host):
         resp = await client.get("/api/v1/tenant/frame-policy", headers={"Host": host})
         assert resp.status_code == 204
-        return resp.headers["content-security-policy"]
+        # The page policy: everything from Stacks itself, framed by the organization's LMS
+        policy = resp.headers["content-security-policy"]
+        assert "default-src 'self'" in policy and "img-src 'self' data:" in policy
+        return next(part for part in policy.split("; ") if part.startswith("frame-ancestors"))
 
     assert await policy("stacks.alpha.edu") == "frame-ancestors 'self' https://alpha.brightspace.com"
     # Beta hasn't set its own: the installation default applies

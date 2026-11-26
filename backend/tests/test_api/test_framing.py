@@ -9,7 +9,9 @@ async def test_responses_carry_frame_ancestors_policy(client: AsyncClient, monke
     monkeypatch.setattr(settings, "frame_ancestors", "https://lms.example.edu https://*.instructure.com")
     for path in ("/api/v1/health/live", "/lti/jwks", "/lti/login"):
         resp = await client.get(path)
-        assert resp.headers["content-security-policy"] == (
+        # API responses carry frame-ancestors; app-rendered pages (the LTI error page) the
+        # full page policy, which ends with it
+        assert resp.headers["content-security-policy"].endswith(
             "frame-ancestors 'self' https://lms.example.edu https://*.instructure.com"
         ), path
 

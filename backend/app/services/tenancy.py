@@ -35,6 +35,10 @@ class OrgSettings(BaseModel):
     frame_ancestors: list[str] | None = None
     # Sent to Crossref and OpenAlex with lookups ("polite pool")
     metadata_contact_email: str | None = None
+    # Look and feel (theme.ThemeSettings, validated when saved) and logo
+    # ({content_type, data: base64}); kept here so saving other settings keeps them
+    theme: dict | None = None
+    logo: dict | None = None
 
     @field_validator("frame_ancestors")
     @classmethod
@@ -98,6 +102,27 @@ class Tenant:
 def frame_policy(tenant: Tenant | None) -> str:
     origins = tenant.frame_ancestors if tenant else settings.frame_ancestors.split()
     return " ".join(["frame-ancestors", "'self'", *origins])
+
+
+def page_policy(tenant: Tenant | None) -> str:
+    """Content-Security-Policy for Stacks' pages: everything from Stacks itself, framed
+    only by the organization's LMS. Contains custom theme CSS too: it can't load
+    images, fonts or anything else from elsewhere, so it can't send data out."""
+    return "; ".join(
+        [
+            "default-src 'self'",
+            "script-src 'self'",
+            # React and some components set inline style attributes
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self' data:",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            frame_policy(tenant),
+        ]
+    )
 
 
 def base_url(tenant: Tenant | None) -> str:

@@ -55,7 +55,7 @@ def _error_page(message: str, status_code: int = 400, tenant: tenancy.Tenant | N
 <body><main><h1>Stacks couldn't open</h1><p>{html.escape(message)}</p></main></body></html>"""
     # Shown inside the LMS frame: allow the organization's LMS origins
     return HTMLResponse(
-        body, status_code=status_code, headers={"Content-Security-Policy": tenancy.frame_policy(tenant)}
+        body, status_code=status_code, headers={"Content-Security-Policy": tenancy.page_policy(tenant)}
     )
 
 
