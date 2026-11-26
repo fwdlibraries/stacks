@@ -67,43 +67,41 @@ Maintain a minimum clear space equal to the height of the letter "S" in the word
 
 ## 2. Colour Palette
 
-The palette is drawn from physical library materials — aged paper, ink, cloth bindings, brass hardware — with two functional additions (Active green, Deep Night) for UI use.
+The interface is neutral and modern: cool greys, white panels and one blue accent. (The parchment, ink and brass palette from earlier versions now belongs to the logo only; see "Logo palette" below. Organizations can still recreate it under Look and feel › Custom, where the classic serif fonts remain available.)
 
-### Primary Colours
+### Interface colours
 
-| Name | Hex | Usage |
-|---|---|---|
-| **Ink Navy** | `#2C3E5A` | Primary text, primary UI elements, main spine colour |
-| **Parchment** | `#F7F4EF` | Default background, light variant logo background |
-| **Warm Grey** | `#8A7B68` | Secondary text, captions, tagline, borders |
+| Name | Hex | Usage | Contrast |
+|---|---|---|---|
+| **Ink** | `#1B2433` | Body text, headings | 14.5:1 on Page |
+| **Muted** | `#5B6676` | Secondary text, captions, table headers, sidebar group labels | 5.4:1 on Page |
+| **Page** | `#F5F7FA` | Page background | |
+| **Surface** | `#FFFFFF` | Cards, panels, menus, the top bar and the admin sidebar | |
+| **Line** | `#E3E7ED` | Borders and dividers between panels | |
+| **Field line** | `#7D8797` | Form field borders | 3.6:1 on white (WCAG 1.4.11) |
+| **Header fill** | `#F8F9FB` | Table header rows, notes, hover backgrounds | |
+| **Accent** | `#1F62B8` | Links, primary buttons, active navigation, focus | 6.0:1 on white |
 
-### Secondary / Accent Colours
+### Status colours
 
-| Name | Hex | Usage |
-|---|---|---|
-| **Brass** | `#B5843A` | Accent colour, highlights, the narrow accent spine in the logo |
-| **Slate** | `#5C7A8C` | Secondary UI elements, links, top spine in the logo |
-| **Forest** | `#4A6741` | Tertiary accent, success-adjacent contexts |
-
-### Functional Colours
-
-| Name | Hex | Usage |
-|---|---|---|
-| **Active** | `#5DBE7E` | Published/live status, success states, active indicator light |
-| **Deep Night** | `#1C2A3A` | Dark mode background, dark variant logo background |
-| **Sand** | `#D6C9B0` | Subtle borders, dividers, hover backgrounds, depth shadow in logo |
+| Name | Hex | Bootstrap role | Used for |
+|---|---|---|---|
+| Green | `#1D7A46` | `success`, `published` | Published, completed, connected |
+| Amber | `#A15C00` | `warning` | Needs attention, pending |
+| Red | `#B42318` | `danger` | Failed, destructive actions |
+| Teal | `#0E6F8A` | `info` | Informational |
 
 ### Colour Usage Principles
 
-**Dominance:** Ink Navy and Parchment carry the majority of any surface. Brass is the accent — it should appear sparingly and purposefully, never as a background fill for large areas.
+**One accent.** Blue carries everything interactive. Don't introduce a second accent colour; status colours are for status only.
 
-**Status semantics:** Active green (`#5DBE7E`) is reserved for published/live states. Brass (`#B5843A`) naturally reads as "pending" or "in progress" given its amber character — lean into this in UI status indicators. Avoid introducing new semantic colours without updating this guide.
+**Never colour alone.** A status dot or tinted badge always comes with a word ("Failed", "Hidden in catalogue").
 
-**Accessibility:** All text colour pairings must meet WCAG AA contrast (4.5:1 for normal text, 3:1 for large text). Approved pairings:
-- Ink Navy on Parchment ✓
-- Parchment on Ink Navy ✓
-- Parchment on Deep Night ✓
-- Warm Grey on Parchment — acceptable for secondary/caption text (large or UI context only, verify at intended size)
+**Accessibility:** every text pairing meets WCAG 2.1 AA (4.5:1 for normal text), and form field borders meet 3:1. `backend/tests/test_theme.py` checks the default tokens and each Match LMS look; the Look and feel screen warns organizations whose own colours fall short.
+
+### Logo palette
+
+The logo keeps its original colours: Ink Navy `#2C3E5A`, Slate `#5C7A8C`, Brass `#B5843A`, Parchment `#F7F4EF`, Sand `#D6C9B0` and Deep Night `#1C2A3A`. Use them for the logo and brand assets, not for interface elements.
 
 ---
 
@@ -113,36 +111,29 @@ The palette is drawn from physical library materials — aged paper, ink, cloth 
 
 | Role | Typeface | Weight | Source |
 |---|---|---|---|
-| Display / Wordmark | Playfair Display | SemiBold (600) | Google Fonts |
-| Body / UI | Libre Baskerville | Regular (400), Bold (700) | Google Fonts |
+| Interface and headings | Inter | Variable (400–700; headings 650) | `@fontsource-variable/inter`, bundled |
+| Logo wordmark | Playfair Display | SemiBold (600) | Logo artwork only |
 
-Both typefaces are open source (OFL licence) and available via Google Fonts. They are also included as web font imports in the frontend.
-
-**Rationale:** Playfair Display is a transitional serif with strong classical associations — used by academic publishers, literary journals, and institutional print. Libre Baskerville is a web-optimised version of Baskerville, highly legible at body sizes with good screen rendering. Together they read as authoritative and considered without being stiff.
+Fonts are bundled with the frontend and never loaded from a font CDN: pages embedded in an LMS shouldn't tell third parties who is reading what, and the page policy blocks outside font requests anyway.
 
 ### Type Scale
 
-The frontend uses a modular scale based on a 1.25 ratio (Major Third) with a 16px base.
+16px base, so reading lists stay comfortable for students.
 
 | Label | Size | Usage |
 |---|---|---|
-| `xs` | 11px | Badges, metadata labels, all-caps captions |
-| `sm` | 13px | Secondary text, staff notes, timestamps |
+| `xs` | 12px | Badges, all-caps labels |
+| `sm` | 14px | Secondary text, tables, navigation, notes |
 | `base` | 16px | Body text, citation details |
-| `lg` | 20px | Section headings |
-| `xl` | 25px | Page headings |
-| `2xl` | 31px | Display headings (used sparingly) |
+| `h3` | 18px | Section headings on a reading list |
+| `h2` | 22px | Panel and page sub-headings |
+| `h1` | 28px | Page headings |
 
-### Tracking
+### Tracking and line height
 
-- All-caps labels: `letter-spacing: 2.5px` to `3px` — opens up the letterspacing to improve legibility of capitalised text.
-- Wordmark: `letter-spacing: -1px` — tightens the display-size text for a more refined, press-like appearance.
-- Body and UI text: default (no tracking applied).
-
-### Line Height
-
-- Body text: `1.7` — generous leading for reading comfort.
-- UI labels and headings: `1.3` — tighter, as these are short strings not reading text.
+- Headings: `letter-spacing: -0.01em`, line height 1.25.
+- All-caps labels (`.text-caps`): `letter-spacing: 0.05em`, 12px, weight 600, in Muted.
+- Body text: line height 1.55. Numbers in tables and stat tiles use tabular figures (`.tabular-nums`).
 
 ---
 
@@ -161,7 +152,7 @@ If illustration is needed (empty states, onboarding, error pages), follow these 
 - **Geometric, not figurative.** Shapes and abstract forms rather than characters or people.
 - **Library-referential.** Books, shelves, cards, catalog drawers — the physical library is the visual vocabulary.
 - **Sparse.** One or two elements with generous white space. Not diagrammatic, not decorative.
-- **Colour-constrained.** Use two colours maximum from the palette, plus Parchment as the background. The Brass + Ink Navy combination is the natural first choice.
+- **Colour-constrained.** Use the accent plus greys; at most one status colour where it means something.
 
 ### The Digital Detail Principle
 
@@ -179,9 +170,11 @@ Stacks uses React Bootstrap as its component library. The following principles g
 
 ### General
 
-- **Density:** Prefer comfortable density over compact. This is a tool used by librarians and instructors doing focused work, not a dashboard scanned at a glance. Give elements room to breathe.
-- **Borders over shadows:** Use `#D6C9B0` (Sand) borders rather than box shadows for card and panel separation. Shadows are reserved for elevated elements (modals, dropdowns).
-- **Rounded corners:** `border-radius: 4px` for cards, inputs, and badges. `border-radius: 2px` for small chips and tags. Never fully pill-shaped (`border-radius: 9999px`) except for status indicator dots.
+- **Density:** Prefer comfortable density over compact. Give elements room to breathe.
+- **Borders over shadows:** White panels on the grey page, separated by 1px Line (`#E3E7ED`) borders, no shadows. Shadows are reserved for elevated elements (modals, dropdowns).
+- **Rounded corners:** 6px for buttons and inputs, 8px for cards and panels. Badges are pills.
+- **Layout:** Administration uses a left sidebar (grouped: Settings, People, Insights) that moves above the content on small screens. Reading lists are a single column of cards with an "On this list" section index beside them (above them on phones) when there is more than one section.
+- **Stat tiles:** a small all-caps label, a large tabular number, and one line of context.
 
 ### Cards (CitationCard)
 
@@ -190,39 +183,41 @@ The citation card is the primary UI unit of the product. It should:
 - Display the title as the dominant element, linked if a URL is resolvable.
 - Show bibliographic metadata in a single compact line (author · year · publisher), not a vertical stack of label/value pairs.
 - Carry a clear visual hierarchy: title > metadata > notes > actions.
+- Show the student note in a Header fill box, and the link ("Find at library", "View via DOI", "View online") as a small primary button (an outline button in the editor, where clicks are previews).
 - In editor view only: show Edit/Delete actions, staff notes, and a drag handle.
 
 ### Badges
 
-| Badge type | Colour |
+Badges are soft pills: a light tint of the colour with dark text of the same hue, so each one passes AA. Organizations' own primary colours get matching tints from theme.css.
+
+| Badge type | Bootstrap colour |
 |---|---|
-| Book | Ink Navy (`primary`) |
-| Book Chapter | Slate (`info`) |
-| Journal Article | Forest (`success`) |
-| eBook | Ink Navy (`primary`) |
-| AV / Media | Brass (`warning`) |
-| Website | Warm Grey (`secondary`) |
-| Uploaded File | Muted red (`danger`) |
-| Optional | Light with dark text |
-| Published | Active green |
-| Draft | Warm Grey |
+| Book, eBook | `primary` (blue) |
+| Book Chapter | `info` (teal) |
+| Journal Article | `success` (green) |
+| AV / Media | `warning` (amber) |
+| Website | `secondary` (grey) |
+| Uploaded File | `danger` (red) |
+| Optional, Library record | `light`: outlined, grey text |
+| Published | `published` (green) |
+| Draft | `secondary` |
 
 ### Status Indicators
 
-Three-dot status indicators (modelled on the logo's indicator lights) are the preferred pattern for system status, import progress, and connection state. Use the Active (`#5DBE7E`) / Brass (`#B5843A`) / dim (`#3A5068`) colour set to maintain consistency with the logo.
+Use a small status dot (`.stacks-dot` with `bg-success`, `bg-warning`, `bg-danger` or `bg-secondary`) beside a heading and a sentence that says the status in words, as on the Reports catalogue sync panel.
 
 ### Forms
 
 - Labels above inputs, always. No floating labels.
-- Required fields: mark with a small asterisk in Warm Grey, not red.
+- Required fields: mark with a small asterisk in Muted, not red.
 - Error messages: below the input in a small (`13px`) red-adjacent colour. Do not use inline toast notifications for form validation errors.
-- Submit buttons: full-width on mobile, auto-width on desktop, Ink Navy fill.
+- Submit buttons: full-width on mobile, auto-width on desktop, Accent fill.
 
 ### Empty States
 
 Every empty state needs:
-1. A Phosphor icon (Duotone weight) in Warm Grey.
-2. A single short heading in Playfair Display.
+1. A Phosphor icon (Duotone weight) in Muted.
+2. A single short heading.
 3. One sentence of body text explaining what goes here and how to add it.
 4. A primary action button if one is available.
 

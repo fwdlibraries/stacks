@@ -2,6 +2,10 @@
  * Self-hosted web fonts (OFL), bundled by Vite so the app makes no requests to
  * Google Fonts. That matters for privacy when the app is embedded in an LMS.
  */
+// The default Stacks look: Inter (variable, one file per script)
+import '@fontsource-variable/inter'
+
+// The classic Stacks serifs, still offered under Look and feel › Custom
 import '@fontsource/playfair-display/600.css'
 import '@fontsource/libre-baskerville/400.css'
 import '@fontsource/libre-baskerville/400-italic.css'

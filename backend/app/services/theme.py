@@ -28,8 +28,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 FONTS: dict[str, tuple[str, str]] = {
     # key: (label, CSS font stack). Only self-hosted or system fonts: the page
     # policy blocks font downloads from anywhere else.
-    "stacks-serif": ("Libre Baskerville (Stacks)", '"Libre Baskerville", Georgia, serif'),
-    "stacks-display": ("Playfair Display (Stacks headings)", '"Playfair Display", Georgia, serif'),
+    "inter": ("Inter (Stacks)", '"Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'),
+    "stacks-serif": ("Libre Baskerville (classic Stacks)", '"Libre Baskerville", Georgia, serif'),
+    "stacks-display": ("Playfair Display (classic Stacks headings)", '"Playfair Display", Georgia, serif'),
     "system-sans": ("System sans-serif", 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'),
     "system-serif": ("System serif", 'Georgia, Cambria, "Times New Roman", Times, serif'),
     # Bundled with the frontend (OFL), for the LMS looks
@@ -48,14 +49,15 @@ _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 class ThemeTokens(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    primary: str = "#2C3E5A"  # buttons, active states
-    link: str = "#5C7A8C"
-    background: str = "#F7F4EF"  # page
+    # The standard Stacks look (frontend/src/styles/theme.scss); keep in sync
+    primary: str = "#1F62B8"  # buttons, active states
+    link: str = "#1F62B8"
+    background: str = "#F5F7FA"  # page
     surface: str = "#FFFFFF"  # cards, panels, menus
-    text: str = "#2C3E5A"
-    border: str = "#D6C9B0"
-    heading_font: str = "stacks-display"
-    body_font: str = "stacks-serif"
+    text: str = "#1B2433"
+    border: str = "#E3E7ED"
+    heading_font: str = "inter"
+    body_font: str = "inter"
     corners: Literal["square", "standard", "rounded"] = "standard"
 
     @field_validator("primary", "link", "background", "surface", "text", "border")
@@ -177,6 +179,16 @@ def contrast_warnings(t: ThemeTokens) -> list[str]:
 # ── CSS ──────────────────────────────────────────────────────────────────────
 
 
+def _emphasis(color: str) -> str:
+    """Dark text of the same hue for a soft badge: darken until it reads (7:1) on its tint."""
+    tint = mix(color, "#FFFFFF", 0.85)
+    for weight in (0.4, 0.5, 0.6, 0.7, 0.8):
+        dark = mix(color, "#000000", weight)
+        if contrast(dark, tint) >= 7:
+            return dark
+    return mix(color, "#000000", 0.85)
+
+
 def _vars(name: str, color: str) -> str:
     r, g, b = _rgb(color)
     return f"--bs-{name}: {color}; --bs-{name}-rgb: {r}, {g}, {b};"
@@ -194,6 +206,8 @@ def tokens_css(t: ThemeTokens, scope: str = "html") -> str:
     focus = _rgb(t.primary)
     return f"""{root} {{
   {_vars("primary", t.primary)}
+  --bs-primary-bg-subtle: {mix(t.primary, "#FFFFFF", 0.85)}; --bs-primary-text-emphasis: {_emphasis(t.primary)};
+  --bs-primary-border-subtle: {mix(t.primary, "#FFFFFF", 0.6)};
   {_vars("link-color", t.link)}
   --bs-link-hover-color: {mix(t.link, t.text, 0.5)}; --bs-link-hover-color-rgb: {", ".join(map(str, _rgb(mix(t.link, t.text, 0.5))))};
   {_vars("body-bg", t.background)}

@@ -1,67 +1,96 @@
 // Stacks Bootstrap theme. Values come from docs/design/style-guide.md; keep them in sync.
+// The default look is neutral and modern (greys, one blue accent, Inter). Every text
+// pairing below meets WCAG 2.1 AA; ratios are noted where they're closest to the line.
 
 // ── Palette ──────────────────────────────────────────────────────────────────
-$ink-navy:   #2C3E5A;
-$parchment:  #F7F4EF;
-$warm-grey:  #8A7B68;
-$brass:      #B5843A;
-$slate:      #5C7A8C;
-$forest:     #4A6741;
-$active:     #5DBE7E;
-$deep-night: #1C2A3A;
-$sand:       #D6C9B0;
-$muted-red:  #9E3B32; // "Muted red" for the Uploaded File badge and errors; not specified in the guide
+$ink:          #1B2433; // text (14.5:1 on the page background)
+$muted:        #5B6676; // secondary text (5.4:1 on the page background)
+$page:         #F5F7FA; // page background
+$surface:      #FFFFFF; // cards, panels, menus
+$line:         #E3E7ED; // borders and dividers between panels
+$line-strong:  #7D8797; // form field borders: 3.6:1, so fields stay visible (WCAG 1.4.11)
+$header-fill:  #F8F9FB; // table headers, card headers
+$accent:       #1F62B8; // links, primary buttons, active states (6.0:1 on white)
+$green:        #1D7A46;
+$amber:        #A15C00;
+$red:          #B42318;
+$teal:         #0E6F8A;
 
 // ── Bootstrap theme colours (see the Badges table in the style guide) ─────────────
-$primary:   $ink-navy;
-$secondary: $warm-grey;
-$success:   $forest;
-$info:      $slate;
-$warning:   $brass;
-$danger:    $muted-red;
-$dark:      $deep-night;
+$primary:   $accent;
+$secondary: $muted;
+$success:   $green;
+$info:      $teal;
+$warning:   $amber;
+$danger:    $red;
+$light:     #EEF1F4;
+$dark:      $ink;
 
 $custom-theme-colors: (
-  "published": $active,
+  "published": $green,
 );
 
 // ── Surfaces & borders ───────────────────────────────────────────────────────
-$body-bg:        $parchment;
-$body-color:     $ink-navy;
-$body-secondary-color: $warm-grey;
-$border-color:   $sand;
-$link-color:     $slate;
-$link-hover-color: $ink-navy;
+$body-bg:        $page;
+$body-color:     $ink;
+$body-secondary-color: $muted;
+$border-color:   $line;
+$link-color:     $accent;
+$link-hover-color: #174A8A; // accent, 25% darker
+$link-decoration: none;
+$link-hover-decoration: underline;
 
-$border-radius:     4px;
-$border-radius-sm:  2px;
-$border-radius-lg:  4px;
-$border-radius-xl:  4px;
+$border-radius:     6px;
+$border-radius-sm:  4px;
+$border-radius-lg:  8px;
+$border-radius-xl:  12px;
 
-// Borders over shadows: cards and panels get Sand borders, no shadows
-$card-border-color: $sand;
-$card-bg:           #fff;
-$card-cap-bg:       $parchment;
-$enable-shadows:    false;
+// Borders over shadows: panels get light borders, no shadows
+$card-border-color:  $line;
+$card-border-radius: $border-radius-lg;
+$card-bg:            $surface;
+$card-cap-bg:        $header-fill;
+$card-spacer-y:      1.125rem;
+$card-spacer-x:      1.25rem;
+$enable-shadows:     false;
 $enable-negative-margins: true; // ms-n2 etc. tuck drag handles into the gutter
 
-// ── Typography ───────────────────────────────────────────────────────────────
-$font-family-base:      "Libre Baskerville", Georgia, serif;
-$headings-font-family:  "Playfair Display", Georgia, serif;
-$headings-font-weight:  600;
-$headings-line-height:  1.3;
-$line-height-base:      1.7;
+$input-border-color:      $line-strong;
+$form-select-border-color: $line-strong;
+$form-check-input-border: 1px solid $line-strong;
 
-// Major Third (1.25) scale with a 16px base
-$font-size-base: 1rem;      // 16px
-$font-size-sm:   0.8125rem; // 13px
-$h1-font-size:   1.9375rem; // 31px: 2xl
-$h2-font-size:   1.5625rem; // 25px: xl
-$h3-font-size:   1.25rem;   // 20px: lg
+$table-th-font-weight: 600;
+$table-border-color:   $line;
+$table-cell-padding-y: 0.625rem;
+$table-cell-padding-x: 0.75rem;
+$table-cell-padding-y-sm: 0.5rem;
+$table-cell-padding-x-sm: 0.625rem;
+
+$badge-font-size:     0.75rem; // 12px
+$badge-font-weight:   600;
+$badge-padding-y:     0.25em;
+$badge-padding-x:     0.6em;
+$badge-border-radius: 50rem;
+
+$nav-link-font-weight: 500;
+
+// ── Typography ───────────────────────────────────────────────────────────────
+// Inter is bundled (styles/fonts.ts); no font CDN.
+$font-family-sans-serif: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+$font-family-base:      $font-family-sans-serif;
+$headings-font-family:  $font-family-sans-serif;
+$headings-font-weight:  650;
+$headings-line-height:  1.25;
+$line-height-base:      1.55;
+
+$font-size-base: 1rem;      // 16px: comfortable reading for students
+$font-size-sm:   0.875rem;  // 14px
+$h1-font-size:   1.75rem;   // 28px
+$h2-font-size:   1.375rem;  // 22px
+$h3-font-size:   1.125rem;  // 18px
 $h4-font-size:   1rem;
-$h5-font-size:   1rem;
-$h6-font-size:   0.8125rem;
-$badge-font-size: 0.6875rem; // 11px: xs
+$h5-font-size:   0.9375rem;
+$h6-font-size:   0.875rem;
 
 @import "bootstrap/scss/functions";
 @import "bootstrap/scss/variables";
@@ -76,36 +105,139 @@ $theme-colors: map-merge($theme-colors, $custom-theme-colors);
 
 // ── Stacks-specific tokens & helpers ─────────────────────────────────────────
 :root {
-  --stacks-ink-navy: #{$ink-navy};
-  --stacks-parchment: #{$parchment};
-  --stacks-warm-grey: #{$warm-grey};
-  --stacks-brass: #{$brass};
-  --stacks-slate: #{$slate};
-  --stacks-forest: #{$forest};
-  --stacks-active: #{$active};
-  --stacks-deep-night: #{$deep-night};
-  --stacks-sand: #{$sand};
-  --stacks-dim: #3A5068;
+  --stacks-ink: #{$ink};
+  --stacks-muted: #{$muted};
+  --stacks-page: #{$page};
+  --stacks-line: #{$line};
+  --stacks-header-fill: #{$header-fill};
 }
 
-// All-caps labels (tagline, captions)
+h1, h2, h3, .h1, .h2, .h3 { letter-spacing: -0.01em; }
+
+// Badges are soft pills: a tint of the colour with dark text of the same hue, so
+// every one passes AA. Runtime themes (theme.css) override the *-subtle variables.
+@each $color in map-keys($theme-colors) {
+  $key: if($color == "published", "success", $color);
+  @if not index(("light", "dark"), $color) {
+    .badge.bg-#{$color} {
+      background-color: var(--bs-#{$key}-bg-subtle) !important;
+      color: var(--bs-#{$key}-text-emphasis) !important;
+    }
+  }
+}
+.badge.bg-light {
+  background-color: var(--bs-body-bg) !important;
+  color: var(--bs-secondary-color) !important;
+  border: 1px solid var(--bs-border-color);
+  font-weight: 500;
+}
+
+// Table headers: a quiet band in secondary text
+.table > thead th {
+  background-color: var(--stacks-header-fill);
+  color: var(--bs-secondary-color);
+  font-size: $font-size-sm;
+}
+
+// Small all-caps labels (sidebar groups, stat tiles, captions)
 .text-caps {
   text-transform: uppercase;
-  letter-spacing: 2.5px;
-  font-size: $badge-font-size;
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 // Wordmark in the navbar
 .stacks-wordmark {
   font-family: $headings-font-family;
-  font-weight: 600;
-  letter-spacing: -1px;
-  font-size: 1.5625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 1.125rem;
   line-height: 1;
 }
 
-// Required-field asterisk: Warm Grey, not red
+// Required-field asterisk: secondary text, not red
 .required-mark {
-  color: $warm-grey;
+  color: $muted;
   margin-left: 0.125rem;
+}
+
+// Stat tiles (Reports)
+.stacks-stat {
+  .stacks-stat-value {
+    font-size: 1.875rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+// Status dot (sync, connections): pair it with text, never colour alone
+.stacks-dot {
+  display: inline-block;
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+}
+
+// Side navigation (Administration). Stacks above the content on small screens.
+.stacks-sidenav {
+  background-color: var(--bs-card-bg, #{$surface});
+  border-bottom: 1px solid var(--bs-border-color);
+  width: 100%;
+  @include media-breakpoint-up(lg) {
+    width: 15rem;
+    flex-shrink: 0;
+    border-bottom: 0;
+    border-right: 1px solid var(--bs-border-color);
+  }
+  .stacks-sidenav-group {
+    color: var(--bs-secondary-color);
+    padding: 1.25rem 0.75rem 0.375rem;
+    &:first-child { padding-top: 0; }
+  }
+  .nav-link {
+    color: var(--bs-body-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.5rem 0.75rem;
+    font-size: $font-size-sm;
+    &:hover { background-color: var(--stacks-header-fill); }
+    &.active {
+      color: var(--bs-primary);
+      background-color: rgba(var(--bs-primary-rgb), 0.08);
+      font-weight: 600;
+    }
+  }
+}
+
+.stacks-admin-main { flex: 1 1 auto; min-width: 0; }
+
+// Section index on a reading list ("On this list")
+.stacks-toc {
+  .nav-link {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    margin: 0 -0.5rem;
+    border-radius: var(--bs-border-radius);
+    color: var(--bs-body-color);
+    font-size: $font-size-sm;
+    &:hover { background-color: var(--stacks-header-fill); }
+  }
+}
+
+@include media-breakpoint-up(lg) {
+  .stacks-toc { position: sticky; top: 1.5rem; }
+}
+
+// A student or staff note under a citation
+.stacks-note {
+  background-color: var(--stacks-header-fill);
+  border-radius: var(--bs-border-radius);
+  padding: 0.5rem 0.75rem;
 }

@@ -2,6 +2,26 @@ import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Alert, Nav, Spinner } from "react-bootstrap";
 import { useCurrentUser } from "@/api/hooks/useAuth";
 
+type Need = "settings" | "people" | "reports";
+
+/** The sidebar, in order. Each page needs one permission. */
+const SECTIONS: { group: string; need: Need; pages: { to: string; label: string }[] }[] = [
+  {
+    group: "Settings",
+    need: "settings",
+    pages: [
+      { to: "/admin", label: "Organization" },
+      { to: "/admin/look", label: "Look and feel" },
+      { to: "/admin/signin", label: "Sign-in" },
+      { to: "/admin/connections", label: "Library connections" },
+      { to: "/admin/links", label: "Link resolution" },
+      { to: "/admin/lms", label: "LMS" },
+    ],
+  },
+  { group: "People", need: "people", pages: [{ to: "/admin/people", label: "People" }] },
+  { group: "Insights", need: "reports", pages: [{ to: "/admin/reports", label: "Reports" }] },
+];
+
 /** Administration. Settings need settings.manage organization-wide; People and Reports need
  * people.manage / reports.view anywhere (and show only what's in the user's scope). */
 export default function AdminLayout() {
@@ -10,77 +30,55 @@ export default function AdminLayout() {
 
   if (isLoading) {
     return (
-      <Spinner animation="border" role="status">
+      <Spinner animation="border" role="status" className="m-4">
         <span className="visually-hidden">Loading…</span>
       </Spinner>
     );
   }
-  const settings = Boolean(user?.can?.manage_settings);
-  const people = Boolean(user?.can?.manage_people);
-  const reports = Boolean(user?.can?.view_reports);
-  if (!settings && !people && !reports) {
+  const can: Record<Need, boolean> = {
+    settings: Boolean(user?.can?.manage_settings),
+    people: Boolean(user?.can?.manage_people),
+    reports: Boolean(user?.can?.view_reports),
+  };
+  const sections = SECTIONS.filter((s) => can[s.need]);
+  if (sections.length === 0) {
     return (
-      <Alert variant="warning">You don't have access to administration.</Alert>
+      <div className="p-4">
+        <Alert variant="warning">You don't have access to administration.</Alert>
+      </div>
     );
   }
-  // Send people to the first tab they can use (e.g. department admins: People)
+  // Send people to the first page they can use (e.g. department admins: People)
   const path = location.pathname.replace(/\/$/, "");
-  const allowed = (
-    settings
-      ? [
-          "/admin",
-          "/admin/look",
-          "/admin/signin",
-          "/admin/connections",
-          "/admin/links",
-          "/admin/lms",
-        ]
-      : []
-  )
-    .concat(people ? ["/admin/people"] : [])
-    .concat(reports ? ["/admin/reports"] : []);
-  if (!allowed.includes(path)) {
-    return <Navigate to={allowed[0]} replace />;
+  const pages = sections.flatMap((s) => s.pages);
+  const current = pages.find((p) => p.to === path);
+  if (!current) {
+    return <Navigate to={pages[0].to} replace />;
   }
 
   return (
-    <div style={{ maxWidth: "980px" }}>
-      <h1 className="mb-3">Administration</h1>
-      <Nav variant="tabs" className="mb-4" as="nav" aria-label="Administration">
-        {settings && (
-          <>
-            <Nav.Link as={NavLink} to="/admin" end>
-              Organization
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/admin/look">
-              Look and feel
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/admin/signin">
-              Sign-in
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/admin/connections">
-              Library connections
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/admin/links">
-              Link resolution
-            </Nav.Link>
-            <Nav.Link as={NavLink} to="/admin/lms">
-              LMS
-            </Nav.Link>
-          </>
-        )}
-        {people && (
-          <Nav.Link as={NavLink} to="/admin/people">
-            People
-          </Nav.Link>
-        )}
-        {reports && (
-          <Nav.Link as={NavLink} to="/admin/reports">
-            Reports
-          </Nav.Link>
-        )}
-      </Nav>
-      <Outlet />
+    <div className="d-flex flex-wrap flex-lg-nowrap flex-grow-1">
+      <aside className="stacks-sidenav px-3 py-4">
+        <Nav as="nav" aria-label="Administration" className="flex-column">
+          {sections.map((s) => (
+            <div key={s.group}>
+              <div className="stacks-sidenav-group text-caps">{s.group}</div>
+              {s.pages.map((p) => (
+                <Nav.Link key={p.to} as={NavLink} to={p.to} end>
+                  {p.label}
+                </Nav.Link>
+              ))}
+            </div>
+          ))}
+        </Nav>
+      </aside>
+      <div className="stacks-admin-main px-3 px-md-4 py-4">
+        <div style={{ maxWidth: "1120px" }}>
+          <div className="small text-body-secondary mb-1">Administration</div>
+          <h1 className="mb-3">{current.label}</h1>
+          <Outlet />
+        </div>
+      </div>
     </div>
   );
 }
