@@ -11,6 +11,7 @@ from app.routers import (
     admin_people,
     admin_reports,
     auth,
+    auth_oidc,
     citations,
     extension,
     files,
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
 
     # API v1
     app.include_router(auth.router,      prefix="/api/v1/auth",      tags=["Auth"])
+    app.include_router(auth_oidc.router, prefix="/api/v1/auth/oidc", tags=["Auth"])
     app.include_router(orgs.router,      prefix="/api/v1",           tags=["Organizations"])
     app.include_router(lists.router,     prefix="/api/v1",           tags=["Reading Lists"])
     app.include_router(citations.router, prefix="/api/v1",           tags=["Citations"])

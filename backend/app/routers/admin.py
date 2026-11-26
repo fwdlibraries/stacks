@@ -9,6 +9,7 @@ import re
 import uuid
 from datetime import datetime
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -32,7 +33,7 @@ from app.models.models import (
     User,
 )
 from app.routers.ingest import get_http_client
-from app.services import credentials, resolution, tenancy, theme
+from app.services import access, credentials, resolution, tenancy, theme
 
 router = APIRouter()
 manage_settings = require_permission("settings.manage")
@@ -518,3 +519,131 @@ async def remove_logo(user: User = Depends(manage_settings), db: AsyncSession = 
     org.settings = {k: v for k, v in (org.settings or {}).items() if k != "logo"}
     await db.flush()
     return await _theme_out(db, user)
+
+
+# ── Single sign-on ───────────────────────────────────────────────────────────
+
+
+class SsoOut(BaseModel):
+    configured: bool
+    redirect_uri: str  # register this with the identity provider
+    issuer: str | None = None
+    client_id: str | None = None
+    secret_set: bool = False
+    button_label: str | None = None
+    allowed_domains: list[str] = []
+    allow_signup: bool = False
+    require_mfa: bool = False
+    disable_passwords: bool = False
+    role_mapping: dict[str, str] = {}
+    is_active: bool = False
+
+
+class SsoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    issuer: str = Field(min_length=1, max_length=500)
+    client_id: str = Field(min_length=1, max_length=300)
+    client_secret: str | None = Field(default=None, max_length=1000)  # write-only; omit to keep
+    button_label: str = Field(default="Sign in with your institution", min_length=1, max_length=80)
+    allowed_domains: list[str] = Field(default_factory=list, max_length=20)
+    allow_signup: bool = False
+    require_mfa: bool = False
+    disable_passwords: bool = False
+    role_mapping: dict[str, str] = Field(default_factory=dict)
+    is_active: bool = True
+
+
+async def _sso_out(db: AsyncSession, user: User) -> SsoOut:
+    from app.models.models import SsoConfig
+    from app.services import sso
+
+    base = tenancy.base_url(await tenancy.tenant_for_org(db, user.organization_id))
+    config = await db.scalar(select(SsoConfig).where(SsoConfig.organization_id == user.organization_id))
+    if config is None:
+        return SsoOut(configured=False, redirect_uri=sso.redirect_uri(base))
+    return SsoOut(
+        configured=True, redirect_uri=sso.redirect_uri(base), issuer=config.issuer, client_id=config.client_id,
+        secret_set=bool(config.client_secret_encrypted), button_label=config.button_label,
+        allowed_domains=config.allowed_domains, allow_signup=config.allow_signup, require_mfa=config.require_mfa,
+        disable_passwords=config.disable_passwords, role_mapping=config.role_mapping, is_active=config.is_active,
+    )
+
+
+@router.get("/sso", response_model=SsoOut, summary="Single sign-on settings")
+async def get_sso(user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    return await _sso_out(db, user)
+
+
+@router.put("/sso", response_model=SsoOut, summary="Set up single sign-on")
+async def save_sso(body: SsoIn, user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    from app.models.models import SsoConfig
+    from app.services import sso
+
+    issuer = body.issuer.strip().rstrip("/")
+    if not sso.valid_issuer(issuer):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "The issuer must be an https:// address")
+    if sso.is_entra_multitenant(issuer):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Use your tenant's own issuer (https://login.microsoftonline.com/<tenant ID>/v2.0), not "
+            "'common' or 'organizations': those would accept accounts from any Microsoft customer.",
+        )
+    domains = [d.strip().lower().lstrip("@") for d in body.allowed_domains if d.strip()]
+    if any(not tenancy.normalize_host(d) for d in domains):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Email domains look like example.edu")
+    if (body.allow_signup or body.role_mapping) and not domains:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "List the email domains that may sign in")
+    bad_roles = sorted({r for r in body.role_mapping.values() if r not in access.SYSTEM_ROLES})
+    if bad_roles:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown Stacks roles: {', '.join(bad_roles)}")
+
+    config = await db.scalar(select(SsoConfig).where(SsoConfig.organization_id == user.organization_id))
+    secret = (body.client_secret or "").strip()
+    if config is None and not secret:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Enter the client secret")
+    if config is None:
+        config = SsoConfig(organization_id=user.organization_id)
+        db.add(config)
+    config.issuer, config.client_id = issuer, body.client_id.strip()
+    if secret:
+        config.client_secret_encrypted = credentials.encrypt(secret)
+    config.button_label = body.button_label.strip()
+    config.allowed_domains = list(dict.fromkeys(domains))
+    config.allow_signup, config.require_mfa = body.allow_signup, body.require_mfa
+    config.disable_passwords, config.is_active = body.disable_passwords, body.is_active
+    config.role_mapping = {k.strip(): v for k, v in body.role_mapping.items() if k.strip()}
+    await db.flush()
+    return await _sso_out(db, user)
+
+
+@router.delete("/sso", status_code=status.HTTP_204_NO_CONTENT, summary="Remove single sign-on")
+async def delete_sso(user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    from app.models.models import SsoConfig
+
+    config = await db.scalar(select(SsoConfig).where(SsoConfig.organization_id == user.organization_id))
+    if config is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not set up")
+    await db.delete(config)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class SsoTestIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    issuer: str = Field(min_length=1, max_length=500)
+
+
+@router.post("/sso/test", response_model=TestResult, summary="Check an identity provider's configuration")
+async def test_sso(
+    body: SsoTestIn, user: User = Depends(manage_settings), http: httpx.AsyncClient = Depends(get_http_client)
+):
+    """Reads the provider's discovery document (no sign-in). A real sign-in test needs a browser."""
+    from app.services import sso
+
+    issuer = body.issuer.strip().rstrip("/")
+    if not sso.valid_issuer(issuer) or sso.is_entra_multitenant(issuer):
+        return TestResult(ok=False, message="Use an https:// issuer (for Entra, your tenant's own).")
+    try:
+        found = await sso.discover(http, issuer, fresh=True)
+    except sso.SsoError as exc:
+        return TestResult(ok=False, message=str(exc))
+    return TestResult(ok=True, message=f"Found the sign-in service at {urlsplit(found.authorization_endpoint).netloc}.")
