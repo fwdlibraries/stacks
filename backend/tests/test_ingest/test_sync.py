@@ -93,6 +93,11 @@ async def test_sync_updates_flags_and_logs(db_session, org):
     assert update.details["title"] == ["Old title", "What is history? The George Macaulay Trevelyan lectures"]
     assert update.details["year"] == [1999, 2017]
     assert {k for k, _ in events} == {"updated", "missing", "suppressed"}
+
+    # The run is recorded for the admin reports
+    from app.models.models import BackgroundJob
+    recorded = await db_session.scalar(select(BackgroundJob).where(BackgroundJob.job_type == "catalogue_sync"))
+    assert (recorded.status, recorded.result["checked"], recorded.result["flagged"]) == ("completed", 3, 2)
     assert ("missing", (await citation(db_session, org, GONE)).id) in events
 
 

@@ -1,6 +1,7 @@
 """Scheduled catalogue sync (see app/ingest/sync.py)."""
 import asyncio
 import logging
+import uuid
 
 import httpx
 from celery.schedules import crontab
@@ -25,10 +26,17 @@ celery_app.conf.beat_schedule = {
 
 @celery_app.task
 def sync_catalogue() -> dict:
-    return asyncio.run(_sync_all())
+    """Every organization with an active Alma connection (nightly)."""
+    return asyncio.run(_sync())
 
 
-async def _sync_all() -> dict:
+@celery_app.task
+def sync_catalogue_for(organization_id: str) -> dict:
+    """One organization, now (an administrator's Sync now)."""
+    return asyncio.run(_sync(uuid.UUID(organization_id)))
+
+
+async def _sync(only: uuid.UUID | None = None) -> dict:
     # A fresh engine per run: each asyncio.run() is a new event loop, and pooled
     # asyncpg connections can't move between loops
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
@@ -36,13 +44,12 @@ async def _sync_all() -> dict:
     results: dict[str, dict] = {}
     try:
         async with sessions() as db:
-            org_ids = list(
-                await db.scalars(
-                    select(LibrarySource.organization_id).where(
-                        LibrarySource.kind == "alma", LibrarySource.is_active.is_(True)
-                    )
-                )
+            query = select(LibrarySource.organization_id).where(
+                LibrarySource.kind == "alma", LibrarySource.is_active.is_(True)
             )
+            if only is not None:
+                query = query.where(LibrarySource.organization_id == only)
+            org_ids = list(await db.scalars(query))
         async with httpx.AsyncClient(timeout=30.0) as http:
             for org_id in org_ids:
                 async with sessions() as db:

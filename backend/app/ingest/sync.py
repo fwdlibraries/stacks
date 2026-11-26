@@ -9,6 +9,7 @@ themselves if the record returns.
 Runs daily from Celery beat (app/tasks/sync_tasks.py), or on demand with
 `python -m app.cli sync-catalogue`.
 """
+import dataclasses
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from app.ingest.candidate import SourceError
 from app.ingest.fields import SOURCE_FIELDS, UnusableRecord, citation_fields
 from app.ingest.resolvers import ResolveContext, alma
 from app.models.models import (
+    BackgroundJob,
     Citation,
     CitationEvent,
     College,
@@ -31,6 +33,8 @@ from app.models.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+SYNC_JOB = "catalogue_sync"
 
 # Citations checked per organization per run, oldest-checked first. Alma's API
 # allows ~100 records per call, so the default is 10 calls a day.
@@ -92,8 +96,10 @@ async def sync_organization(
     report = SyncReport()
     if "alma" not in ctx.sources:
         return report
+    started = datetime.now(UTC)
     citations = await bound_citations(db, organization_id, limit)
     if not citations:
+        await _record(db, organization_id, report, started)
         return report
 
     try:
@@ -101,6 +107,7 @@ async def sync_organization(
     except SourceError as exc:
         # Alma unreachable or the key rejected: change nothing, try again next run
         report.errors.append(str(exc))
+        await _record(db, organization_id, report, started)
         return report
 
     now = datetime.now(UTC)
@@ -150,4 +157,21 @@ async def sync_organization(
 
     await db.flush()
     logger.info("Catalogue sync for org %s: %s", organization_id, report)
+    await _record(db, organization_id, report, started)
     return report
+
+
+async def _record(db: AsyncSession, organization_id: uuid.UUID, report: SyncReport, started: datetime) -> None:
+    """Keep each run, so administrators can see when the catalogue was last checked."""
+    db.add(
+        BackgroundJob(
+            job_type=SYNC_JOB,
+            status="failed" if report.errors else "completed",
+            payload={"organization_id": str(organization_id)},
+            result=dataclasses.asdict(report),
+            error="; ".join(report.errors) or None,
+            started_at=started,
+            completed_at=datetime.now(UTC),
+        )
+    )
+    await db.flush()

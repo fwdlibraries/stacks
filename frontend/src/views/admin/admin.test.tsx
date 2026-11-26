@@ -6,6 +6,7 @@ import ConnectionsView from './ConnectionsView'
 import LinkResolutionView from './LinkResolutionView'
 import LmsView from './LmsView'
 import PeopleView from './PeopleView'
+import ReportsView from './ReportsView'
 import { renderRoutes } from '@/test/renderWithProviders'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -17,10 +18,10 @@ afterEach(() => {
   useAuthStore.setState({ token: null, refreshToken: null })
 })
 
-const ME = (manage: boolean, people = manage) => ({
+const ME = (manage: boolean, people = manage, reports = manage) => ({
   id: 'u1', email: 'a@uni.edu', display_name: 'Ada', is_system_admin: false, must_change_password: false,
   organization: { id: 'o1', name: 'Uni', slug: 'uni' },
-  can: { manage_settings: manage, manage_people: people, manage_courses: manage, view_reports: manage },
+  can: { manage_settings: manage, manage_people: people, manage_courses: manage, view_reports: reports },
 })
 
 const ORG = {
@@ -63,10 +64,21 @@ const SCOPES = [
   { type: 'department', id: 'd1', label: 'Arts › History' },
 ]
 
-function mockGets(manage = true, people = manage) {
+const REPORTS = {
+  window_days: 30,
+  overview: { lists_published: 4, lists_draft: 1, citations: 52, library_records: 30, flagged: 1, clicks: 40, direct_clicks: 30 },
+  sync: { connected: true, last_run_at: '2026-11-25T07:15:00Z', last_status: 'completed', checked: 30, updated: 2, flagged: 1, can_run: true },
+  flagged: [{ citation_id: 'c1', title: 'Gone book', list_id: 'l1', list_title: 'HIST101 list', section_title: 'Week 1', status: 'missing', since: '2026-11-24T07:15:00Z' }],
+  hard_to_reach: [{ citation_id: 'c2', title: 'Hard article', list_id: 'l1', list_title: 'HIST101 list', section_title: 'Week 2', clicks: 4, fallback_clicks: 3 }],
+  top_lists: [{ list_id: 'l1', list_title: 'HIST101 list', clicks: 40 }],
+  top_citations: [],
+  imports: [],
+}
+
+function mockGets(manage = true, people = manage, reports = manage) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     const data: Record<string, unknown> = {
-      '/auth/me': ME(manage, people), '/admin/organization': ORG, '/admin/sources': SOURCES, '/admin/link-resolution': LINKS,
+      '/auth/me': ME(manage, people, reports), '/admin/reports': REPORTS, '/admin/organization': ORG, '/admin/sources': SOURCES, '/admin/link-resolution': LINKS,
       '/admin/lms': LMS, '/admin/people': PEOPLE, '/admin/scopes': SCOPES,
     }
     return { data: data[url] }
@@ -83,6 +95,7 @@ const routes = [
       { path: 'links', element: <LinkResolutionView /> },
       { path: 'lms', element: <LmsView /> },
       { path: 'people', element: <PeopleView /> },
+      { path: 'reports', element: <ReportsView /> },
     ],
   },
 ]
@@ -229,5 +242,28 @@ describe('Administration', () => {
         jwks_url: 'https://uni.brightspace.com/d2l/.well-known/jwks', deployment_ids: ['dep-1', 'dep-2'],
       })
     )
+  })
+
+  it('shows reports, and lets organization admins start a sync', async () => {
+    mockGets()
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { status: 'queued' } })
+    renderRoutes(routes, '/admin/reports')
+
+    expect(await screen.findByText('75% went straight to the resource')).toBeInTheDocument()
+    expect(screen.getByText('Gone book')).toBeInTheDocument()
+    expect(screen.getByText('Removed from catalogue')).toBeInTheDocument()
+    expect(screen.getByText('Hard article')).toBeInTheDocument()
+    expect(screen.getByText(/30 records checked, 2 updated, 1 newly flagged/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/admin/sync'))
+    expect(await screen.findByRole('button', { name: 'Started' })).toBeDisabled()
+  })
+
+  it('sends reports-only viewers (librarians) to Reports', async () => {
+    mockGets(false, false, true)
+    renderRoutes(routes, '/admin/people')
+    expect(await screen.findByText('Gone book')).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/reports')
+    expect(screen.queryByRole('link', { name: 'People' })).not.toBeInTheDocument()
   })
 })

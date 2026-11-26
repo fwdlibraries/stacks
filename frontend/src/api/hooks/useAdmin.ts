@@ -307,3 +307,58 @@ export function useSetAccountActive() {
       (await apiClient.patch(`/admin/people/${userId}`, { is_active })).data
   )
 }
+
+// ── Reports ────────────────────────────────────────────────────────────────
+
+interface CitationRow {
+  citation_id: string
+  title: string
+  list_id: string
+  list_title: string
+  section_title: string
+}
+
+export interface Reports {
+  window_days: number
+  overview: {
+    lists_published: number
+    lists_draft: number
+    citations: number
+    library_records: number
+    flagged: number
+    clicks: number
+    direct_clicks: number
+  }
+  sync: {
+    connected: boolean
+    last_run_at?: string | null
+    last_status?: string | null
+    checked?: number | null
+    updated?: number | null
+    flagged?: number | null
+    error?: string | null
+    can_run: boolean
+  }
+  flagged: (CitationRow & { status: string; since?: string | null })[]
+  hard_to_reach: (CitationRow & { clicks: number; fallback_clicks: number })[]
+  top_lists: { list_id: string; list_title: string; clicks: number }[]
+  top_citations: (CitationRow & { clicks: number })[]
+  imports: {
+    id: string
+    status: string
+    created_at: string
+    list_id?: string | null
+    list_title?: string | null
+    total: number
+    added?: number | null
+    by?: string | null
+  }[]
+}
+
+export function useReports() {
+  return useQuery({ queryKey: ['admin', 'reports'], queryFn: async () => (await apiClient.get<Reports>('/admin/reports')).data })
+}
+
+export function useSyncNow() {
+  return useMutation({ mutationFn: async () => (await apiClient.post('/admin/sync')).data })
+}
