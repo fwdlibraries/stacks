@@ -2,12 +2,15 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Button, Container, Nav, Navbar } from 'react-bootstrap'
 import { SignOut } from '@phosphor-icons/react'
 import { useCurrentUser, useLogout } from '@/api/hooks/useAuth'
+import { logoUrl, useTenant } from '@/api/hooks/useTenant'
 
 /** Authenticated editor layout: top navbar + routed content. */
 export function AppShell() {
   const navigate = useNavigate()
   const logout = useLogout()
   const { data: user } = useCurrentUser()
+  const tenant = useTenant()
+  const logo = logoUrl(tenant.data)
 
   const handleSignOut = () => {
     logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
@@ -18,7 +21,11 @@ export function AppShell() {
       <Navbar bg="white" expand="md" className="border-bottom">
         <Container>
           <Navbar.Brand as={Link} to="/lists" className="d-flex align-items-center gap-2">
-            <img src="/favicon.svg" alt="" width={32} height={32} />
+            {logo ? (
+              <img src={logo} alt="" style={{ maxHeight: '32px', maxWidth: '160px' }} />
+            ) : (
+              <img src="/favicon.svg" alt="" width={32} height={32} />
+            )}
             <span className="stacks-wordmark">Stacks</span>
           </Navbar.Brand>
           <Navbar.Toggle aria-controls="stacks-nav" />

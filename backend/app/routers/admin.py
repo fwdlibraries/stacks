@@ -32,7 +32,7 @@ from app.models.models import (
     User,
 )
 from app.routers.ingest import get_http_client
-from app.services import credentials, resolution, tenancy
+from app.services import credentials, resolution, tenancy, theme
 
 router = APIRouter()
 manage_settings = require_permission("settings.manage")
@@ -415,3 +415,102 @@ async def try_link_resolution(
         retracted=bool(found and found.retracted),
         steps=[TryStep(step=s.step, outcome=s.outcome, detail=s.detail, url=s.url) for s in trace.steps],
     )
+
+
+# ── Look and feel ────────────────────────────────────────────────────────────
+
+
+class FontOption(BaseModel):
+    key: str
+    label: str
+
+
+class ThemeOut(theme.ThemeSettings):
+    has_logo: bool
+    warnings: list[str]  # contrast problems with the colors in effect
+    fonts: list[FontOption]
+    # LMS presets not yet available (waiting on the vendors' style guides)
+    lms_presets_ready: bool = False
+
+
+class ThemePreview(BaseModel):
+    css: str
+    warnings: list[str]
+
+
+class LogoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    content_type: str = Field(max_length=50)
+    data: str = Field(max_length=theme.MAX_LOGO_BYTES * 2)  # base64
+
+
+def _theme_errors(exc: ValidationError) -> HTTPException:
+    first = exc.errors()[0]
+    where = ".".join(str(p) for p in first.get("loc", ()))
+    message = first["msg"].removeprefix("Value error, ")
+    return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{where}: {message}" if where else message)
+
+
+async def _theme_out(db: AsyncSession, user: User) -> ThemeOut:
+    org = await db.get(Organization, user.organization_id)
+    stored = (org.settings or {})
+    settings_ = theme.ThemeSettings.model_validate(stored.get("theme") or {})
+    tokens = theme.effective_tokens(settings_)
+    return ThemeOut(
+        **settings_.model_dump(),
+        has_logo=bool(stored.get("logo")),
+        warnings=theme.contrast_warnings(tokens) if tokens else [],
+        fonts=[FontOption(key=k, label=label) for k, (label, _) in theme.FONTS.items()],
+    )
+
+
+@router.get("/theme", response_model=ThemeOut, summary="Look and feel")
+async def get_theme(user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    return await _theme_out(db, user)
+
+
+@router.put("/theme", response_model=ThemeOut, summary="Change the look and feel")
+async def save_theme(body: dict, user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    try:
+        settings_ = theme.ThemeSettings.model_validate(body)
+    except ValidationError as exc:
+        raise _theme_errors(exc) from exc
+    org = await db.get(Organization, user.organization_id)
+    org.settings = {**(org.settings or {}), "theme": settings_.model_dump()}
+    await db.flush()
+    return await _theme_out(db, user)
+
+
+@router.post("/theme/preview", response_model=ThemePreview, summary="Preview unsaved theme settings")
+async def preview_theme(body: dict, user: User = Depends(manage_settings)):
+    """CSS for the settings, scoped to an element with class stacks-theme-preview, plus
+    contrast warnings. Custom CSS isn't previewed (it applies to the whole site)."""
+    try:
+        settings_ = theme.ThemeSettings.model_validate(body)
+    except ValidationError as exc:
+        raise _theme_errors(exc) from exc
+    tokens = theme.effective_tokens(settings_) or theme.ThemeTokens()
+    return ThemePreview(
+        css=theme.tokens_css(tokens, scope=".stacks-theme-preview"),
+        warnings=theme.contrast_warnings(tokens),
+    )
+
+
+@router.put("/theme/logo", response_model=ThemeOut, summary="Upload a logo")
+async def upload_logo(body: LogoIn, user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    try:
+        theme.validate_logo(body.content_type, body.data)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    org = await db.get(Organization, user.organization_id)
+    org.settings = {**(org.settings or {}), "logo": {"content_type": body.content_type, "data": body.data}}
+    await db.flush()
+    return await _theme_out(db, user)
+
+
+@router.delete("/theme/logo", response_model=ThemeOut, summary="Remove the logo")
+async def remove_logo(user: User = Depends(manage_settings), db: AsyncSession = Depends(get_db)):
+    org = await db.get(Organization, user.organization_id)
+    org.settings = {k: v for k, v in (org.settings or {}).items() if k != "logo"}
+    await db.flush()
+    return await _theme_out(db, user)

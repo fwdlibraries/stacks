@@ -23,7 +23,7 @@ export default function AdminLayout() {
   }
   // Send people to the first tab they can use (e.g. department admins: People)
   const path = location.pathname.replace(/\/$/, '')
-  const allowed = (settings ? ['/admin', '/admin/connections', '/admin/links', '/admin/lms'] : [])
+  const allowed = (settings ? ['/admin', '/admin/look', '/admin/connections', '/admin/links', '/admin/lms'] : [])
     .concat(people ? ['/admin/people'] : [])
     .concat(reports ? ['/admin/reports'] : [])
   if (!allowed.includes(path)) {
@@ -38,6 +38,9 @@ export default function AdminLayout() {
           <>
             <Nav.Link as={NavLink} to="/admin" end>
               Organization
+            </Nav.Link>
+            <Nav.Link as={NavLink} to="/admin/look">
+              Look and feel
             </Nav.Link>
             <Nav.Link as={NavLink} to="/admin/connections">
               Library connections

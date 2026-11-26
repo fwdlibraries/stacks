@@ -1,3 +1,4 @@
+import { logoUrl, useTenant } from '@/api/hooks/useTenant'
 import { useParams } from 'react-router-dom'
 import { Container, Alert, Spinner } from 'react-bootstrap'
 import { usePublicList } from '@/api/hooks/useLists'
@@ -14,6 +15,8 @@ import { CitationCard } from '@/components/citations/CitationCard'
  * - Statically cacheable — reading lists change infrequently mid-semester
  */
 export default function PublicListView() {
+  const tenant = useTenant()
+  const logo = logoUrl(tenant.data)
   const { orgSlug, courseCode, term } = useParams<{
     orgSlug: string
     courseCode: string
@@ -58,6 +61,9 @@ export default function PublicListView() {
 
   return (
     <Container className="py-4" style={{ maxWidth: '800px' }}>
+      {/* The organization's logo, if it has one */}
+      {logo && <img src={logo} alt={tenant.data?.name ?? ''} style={{ maxHeight: '48px', maxWidth: '240px' }} className="mb-3" />}
+
       {/* List header */}
       <h1 className="h3 mb-1">{list.title}</h1>
       {list.description && (
