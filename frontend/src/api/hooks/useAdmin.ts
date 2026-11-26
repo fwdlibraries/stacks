@@ -390,6 +390,8 @@ export interface ThemeState extends ThemeSettings {
   warnings: string[]
   fonts: { key: string; label: string }[]
   lms_presets_ready: boolean
+  /** The LMS this organization launches from, as "auto" matches it */
+  detected_lms: string | null
 }
 
 const THEME = ['admin', 'theme']

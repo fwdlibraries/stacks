@@ -477,6 +477,9 @@ class LtiPlatform(Base):
     tool_public_key: Mapped[str] = mapped_column(Text, nullable=False)
     tool_key_id: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Which LMS this is ('brightspace' | 'canvas' | 'moodle' | other), learned from
+    # launches (tool_platform claim); lets "match LMS" theming pick the right look
+    product_family: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     deployments: Mapped[list["LtiDeployment"]] = relationship(back_populates="platform")

@@ -127,6 +127,8 @@ async def lti_launch(
 
         claims = await lti.validate_id_token(str(id_token), platform, record["nonce"])
         deployment = await lti.find_deployment(db, platform, claims)
+        if (family := lti.product_family(claims)) and platform.product_family != family:
+            platform.product_family = family
         organization_id = deployment.organization_id or platform.organization_id
         if _wrong_site(host_tenant, organization_id):
             raise lti.LaunchError(WRONG_SITE)
