@@ -18,7 +18,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import ColumnElement, false, or_, select, true
+from sqlalchemy import ColumnElement, and_, false, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import (
@@ -190,10 +190,16 @@ def list_condition(grants: Grants, permission: str) -> ColumnElement[bool]:
     if ids := by_type.get(ScopeType.course_template):
         parts.append(CourseTemplate.id.in_(ids))
     if ids := by_type.get(ScopeType.course_offering):
-        # The offering's lists: its course's lists and any list it overrides with
+        # The offering's lists: its own section lists, its course's shared lists, and any
+        # list it overrides with. Not other terms' section lists.
+        parts.append(ReadingList.course_offering_id.in_(ids))
         parts.append(
-            ReadingList.course_template_id.in_(
-                select(CourseOffering.course_template_id).where(CourseOffering.id.in_(ids))
+            and_(
+                ReadingList.course_offering_id.is_(None),
+                ReadingList.kind == "course",
+                ReadingList.course_template_id.in_(
+                    select(CourseOffering.course_template_id).where(CourseOffering.id.in_(ids))
+                ),
             )
         )
         parts.append(
@@ -256,4 +262,18 @@ async def can_manage_scope(db: AsyncSession, grants: Grants, scope_type: ScopeTy
     if grants.system_admin:
         return True
     held = grants.scopes.get("people.manage", set())
+    return any(link in held for link in chain)
+
+
+async def holds_at(db: AsyncSession, grants: Grants, permission: str, scope_type: ScopeType, scope_id: uuid.UUID) -> bool:
+    """Does the user hold `permission` at this scope or anywhere above it (in their organization)?"""
+    found = await scope_chain(db, scope_type, scope_id)
+    if found is None:
+        return False
+    chain, org_id = found
+    if org_id != grants.user.organization_id:
+        return False
+    if grants.system_admin or grants.organization_wide(permission):
+        return True
+    held = grants.scopes.get(permission, set())
     return any(link in held for link in chain)

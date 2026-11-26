@@ -3,6 +3,7 @@ import { Alert, Badge, ListGroup, Spinner } from 'react-bootstrap'
 import { Books } from '@phosphor-icons/react'
 import { useReadingLists } from '@/api/hooks/useLists'
 import { EmptyState } from '@/components/common/EmptyState'
+import { termLabel } from '@/lib/listTerms'
 
 export default function ListsIndexView() {
   const { data: lists, isLoading, isError } = useReadingLists()
@@ -41,7 +42,10 @@ export default function ListsIndexView() {
               to={`/lists/${list.id}`}
               className="d-flex justify-content-between align-items-center py-3"
             >
-              <span>{list.title}</span>
+              <span>
+                {list.title}
+                <span className="d-block small text-body-secondary">{termLabel(list)}</span>
+              </span>
               <Badge bg={list.is_published ? 'published' : 'secondary'}>
                 {list.is_published ? 'Published' : 'Draft'}
               </Badge>

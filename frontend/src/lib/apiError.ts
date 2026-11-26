@@ -15,6 +15,10 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 
   const detail = (error.response.data as { detail?: unknown } | undefined)?.detail
   if (typeof detail === 'string') return detail
+  // Some errors carry details alongside the message, e.g. { message, list_id }
+  if (detail && typeof detail === 'object' && typeof (detail as { message?: unknown }).message === 'string') {
+    return (detail as { message: string }).message
+  }
   if (Array.isArray(detail)) {
     const messages = (detail as ValidationIssue[])
       .map((issue) => {

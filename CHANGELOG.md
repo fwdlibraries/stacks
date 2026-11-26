@@ -15,6 +15,7 @@ Stacks uses [Semantic Versioning](https://semver.org/).
 - Student reading lists have a course header, an "On this list" section index, soft type badges and link buttons.
 
 ### Added
+- Terms (rollover stage 1, see docs/design/rollover.md): Administration › Terms manages teaching terms (code, name, dates, rollover and lists-due dates), and an LMS course code pattern such as `{crn}.{term}` lets launches find their term and section. Each term of a course can have its own reading list: "Copy to another term" in the editor makes a draft copy that keeps each item's identity across terms. Existing lists stay shared by every term, as before.
 - Initial project scaffold
 - Database schema for org hierarchy, reading lists, citations, users, LTI
 - FastAPI backend with health endpoints

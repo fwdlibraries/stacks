@@ -1,6 +1,6 @@
 """Schemas for the authenticated (staff) reading list views."""
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import ClassVar, Literal
 from urllib.parse import urlsplit
 
@@ -32,6 +32,18 @@ class StaffSection(BaseModel):
     citations: list[StaffCitation] = []
 
 
+class TermRef(BaseModel):
+    code: str
+    name: str
+
+
+class CopiedFrom(BaseModel):
+    id: uuid.UUID
+    title: str
+    kind: str
+    term_name: str | None = None
+
+
 class ReadingListSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,9 +53,16 @@ class ReadingListSummary(BaseModel):
     visibility: str
     is_published: bool
     updated_at: datetime
+    # 'course' (shared by every term), 'section' (one term's) or 'primary'
+    kind: str = "course"
+    term: TermRef | None = None
+    section: str | None = None
+    copied_from: CopiedFrom | None = None
+    copied_at: datetime | None = None
     # What the current user may do with it (from their roles)
     can_edit: bool = False
     can_publish: bool = False
+    can_copy: bool = False
 
 
 class StaffReadingList(ReadingListSummary):
@@ -84,6 +103,24 @@ class ReadingListUpdate(_Input):
     visibility: Visibility | None = None
 
     _strip = field_validator("title", "description", mode="before")(_blank_to_none)
+
+
+class ListCopy(_Input):
+    """Copy a list into a term (and optionally a section) of the same course."""
+    term_id: uuid.UUID
+    section: str | None = Field(default=None, max_length=64)
+
+    _strip = field_validator("section", mode="before")(_blank_to_none)
+
+
+class TermOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    code: str
+    name: str
+    starts_on: date | None = None
+    ends_on: date | None = None
 
 
 class SectionCreate(_Input):

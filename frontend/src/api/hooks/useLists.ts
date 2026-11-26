@@ -72,6 +72,27 @@ export interface ReadingListSummary {
   /** What the current user may do with it, from their roles */
   can_edit?: boolean
   can_publish?: boolean
+  /** May copy it into another term (needs the whole course, not one offering) */
+  can_copy?: boolean
+  /** 'course': shared by every term; 'section': one term's own list; 'primary' */
+  kind?: ListKind
+  term?: TermRef | null
+  section?: string | null
+  copied_from?: { id: string; title: string; kind: ListKind; term_name?: string | null } | null
+  copied_at?: string | null
+}
+
+export type ListKind = 'course' | 'section' | 'primary'
+
+export interface TermRef {
+  code: string
+  name: string
+}
+
+export interface Term extends TermRef {
+  id: string
+  starts_on?: string | null
+  ends_on?: string | null
 }
 
 export interface ReadingList extends ReadingListSummary {
@@ -109,6 +130,30 @@ export function useReadingListFull(listId: string) {
       const { data } = await apiClient.get<ReadingList>(`/lists/${listId}/full`)
       return data
     },
+  })
+}
+
+/** The organization's terms, newest first */
+export function useTerms(enabled = true) {
+  return useQuery({
+    queryKey: ['terms'],
+    enabled,
+    queryFn: async () => {
+      const { data } = await apiClient.get<Term[]>('/terms')
+      return data
+    },
+  })
+}
+
+/** Copy a list into another term (and optionally a section) of the same course */
+export function useCopyList(listId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { term_id: string; section?: string | null }) => {
+      const { data } = await apiClient.post<ReadingListSummary>(`/lists/${listId}/copy`, input)
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['lists'] }),
   })
 }
 

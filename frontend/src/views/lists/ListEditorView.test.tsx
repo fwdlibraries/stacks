@@ -45,6 +45,50 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('ListEditorView', () => {
+  it('copies the list into another term and opens the copy', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/ingest/capabilities') return { data: { library_search: false } }
+      if (url === '/terms') return { data: [{ id: 't2', code: 'spring-2027', name: 'Spring 2027' }] }
+      return { data: { ...LIST, can_copy: true, kind: 'course' } }
+    })
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { ...LIST, id: 'l2', kind: 'section' } })
+    renderRoutes(routes, '/lists/l1')
+
+    expect(await screen.findByText(/All terms/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy to another term' }))
+    const dialog = await screen.findByRole('dialog')
+    const term = within(dialog).getByLabelText(/^Term/)
+    await within(dialog).findByRole('option', { name: /Spring 2027/ })
+    fireEvent.change(term, { target: { value: 't2' } })
+    fireEvent.change(within(dialog).getByLabelText(/^Section/), { target: { value: ' 40112 ' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Copy list' }))
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/lists/l1/copy', { term_id: 't2', section: '40112' }))
+  })
+
+  it('shows which term a copy is for and where it came from', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) =>
+      url === '/ingest/capabilities'
+        ? { data: { library_search: false } }
+        : {
+            data: {
+              ...LIST,
+              kind: 'section',
+              term: { code: '202710', name: 'Fall 2027' },
+              section: '40112',
+              copied_from: { id: 'l0', title: 'HIST 101 Reading List', kind: 'course', term_name: null },
+              copied_at: '2027-07-01T12:00:00Z',
+            },
+          }
+    )
+    renderRoutes(routes, '/lists/l1')
+
+    expect(await screen.findByText(/Fall 2027 · 40112/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'HIST 101 Reading List' })).toHaveAttribute('href', '/lists/l0')
+    // No copy permission: no button
+    expect(screen.queryByRole('button', { name: 'Copy to another term' })).not.toBeInTheDocument()
+  })
+
   it('publishes the list', async () => {
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue({ data: { ...LIST, is_published: true } })
     renderRoutes(routes, '/lists/l1')
