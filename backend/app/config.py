@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     default_organization: str = ""
     require_known_host: bool = False
 
+    # Allow plain-http identity providers for single sign-on (local testing with a mock
+    # provider only). Deliberately separate from DEBUG, which a public dev site may have on.
+    oidc_allow_http: bool = False
+
     # Encrypts stored credentials such as library API keys (Fernet key, see
     # `python -m app.cli generate-credentials-key`). Empty: derived from SECRET_KEY,
     # which then can't be rotated without re-entering those credentials.

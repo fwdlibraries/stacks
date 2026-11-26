@@ -264,6 +264,37 @@ class Citation(Base):
         return self.source_system in AUTHORITATIVE_SOURCES and self.source_status != "unlinked"
 
 
+# ─── Single sign-on ───────────────────────────────────────────────────────────
+
+class SsoConfig(Base):
+    """An organization's OpenID Connect sign-in (app/services/sso.py). One per organization."""
+    __tablename__ = "sso_configs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+    # The provider's issuer, e.g. https://login.microsoftonline.com/<tenant id>/v2.0
+    issuer: Mapped[str] = mapped_column(Text, nullable=False)
+    client_id: Mapped[str] = mapped_column(Text, nullable=False)
+    client_secret_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    button_label: Mapped[str] = mapped_column(Text, nullable=False, default="Sign in with your institution")
+    # Emails in these domains may match invitations or create accounts
+    allowed_domains: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    # Create an account (with no roles) on first sign-in; otherwise invited people only
+    allow_signup: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Require the provider to say multi-factor authentication was used (amr claim)
+    require_mfa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Turn off email-and-password sign-in for this organization (system admins excepted)
+    disable_passwords: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Provider role claim value → Stacks role, granted organization-wide, e.g.
+    # {"Stacks.Librarian": "Librarian"}; kept in step at each sign-in
+    role_mapping: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 # ─── Library sources (discovery / catalogue connections) ──────────────────────
 
 class LibrarySource(Base):
@@ -362,6 +393,10 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(Text)
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Set when an administrator invited this person: their first single sign-on with
+    # this (verified) email links to this account. Nothing else links by email.
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", name="fk_users_invited_by"))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -376,6 +411,8 @@ class User(Base):
 
 class UserIdentity(Base):
     __tablename__ = "user_identities"
+    # One external identity belongs to one account
+    __table_args__ = (UniqueConstraint("provider", "provider_user_id", name="uq_user_identities_provider_user"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -452,6 +489,9 @@ class UserRoleAssignment(Base):
     scope_type: Mapped[ScopeType] = mapped_column(SAEnum(ScopeType), nullable=False)
     scope_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     granted_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    # 'sso': kept in step with the identity provider's role claims at each sign-in
+    # (added and removed); anything else was granted in Stacks and is left alone
+    source: Mapped[str | None] = mapped_column(Text)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

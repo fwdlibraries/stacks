@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.models import User
+from app.models.models import SsoConfig, User
 from app.schemas.auth import (
     Capabilities,
     CurrentUser,
@@ -73,6 +73,16 @@ async def local_login(
             detail="Incorrect email or password",
         )
     await store.reset(key)
+    # An organization that signs in through its identity provider can turn passwords off
+    # (system admins keep theirs, as a way in if single sign-on breaks)
+    if not user.is_system_admin and await db.scalar(
+        select(SsoConfig.id).where(
+            SsoConfig.organization_id == user.organization_id,
+            SsoConfig.is_active.is_(True),
+            SsoConfig.disable_passwords.is_(True),
+        )
+    ):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Use your institution's sign-in for Stacks.")
     user.last_login_at = datetime.now(UTC)
     return _issue_tokens(user)
 

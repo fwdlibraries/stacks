@@ -119,6 +119,7 @@ class PersonOut(BaseModel):
     is_system_admin: bool
     from_lms: bool
     has_password: bool
+    invited: bool = False  # invited, hasn't signed in yet
     last_login_at: datetime | None
     roles: list[RoleOut]
 
@@ -174,6 +175,7 @@ async def people(
                 id=u.id, display_name=u.display_name, email=u.email, is_active=bool(u.is_active),
                 is_system_admin=bool(u.is_system_admin), from_lms=u.id in from_lms,
                 has_password=bool(u.password_hash), last_login_at=u.last_login_at,
+                invited=bool(u.invited_at) and u.last_login_at is None,
                 roles=sorted(roles_by_user.get(u.id, []), key=lambda r: (r.role, r.scope.label)),
             )
             for u in users
@@ -237,6 +239,44 @@ async def take_role(
         raise HTTPException(status.HTTP_409_CONFLICT, "You can't remove your own organization Administrator role")
     await db.delete(assignment)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class InviteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=3, max_length=254)
+    display_name: str = Field(min_length=1, max_length=200)
+    role: str = Field(min_length=1, max_length=50)
+    scope_type: ScopeType
+    scope_id: uuid.UUID
+
+
+@router.post("/people/invite", response_model=PersonOut, status_code=status.HTTP_201_CREATED,
+             summary="Invite someone (they sign in with single sign-on)")
+async def invite(body: InviteIn, grants: access.Grants = Depends(people_manager), db: AsyncSession = Depends(get_db)):
+    """Creates their account with a role. Their first single sign-on with this email
+    (verified by the identity provider, in an allowed domain) links to it."""
+    import re
+    from datetime import UTC, datetime
+
+    email = body.email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Enter an email address")
+    if body.role not in access.SYSTEM_ROLES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Unknown role: {body.role}")
+    if not await access.can_manage_scope(db, grants, body.scope_type, body.scope_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can only give roles within the areas you manage")
+    existing = await db.scalar(
+        select(User).where(User.organization_id == grants.user.organization_id, func.lower(User.email) == email)
+    )
+    if existing:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Someone with that email already has an account: give them a role instead")
+    person = User(organization_id=grants.user.organization_id, email=email, display_name=body.display_name.strip(),
+                  invited_at=datetime.now(UTC), invited_by=grants.user.id)
+    db.add(person)
+    await db.flush()
+    await access.grant(db, person, body.role, body.scope_type, body.scope_id, granted_by=grants.user)
+    page = await people(q=email, offset=0, limit=100, grants=grants, db=db)
+    return next(p for p in page.people if p.id == person.id)
 
 
 class AccountUpdate(BaseModel):
