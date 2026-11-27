@@ -22,6 +22,9 @@ The backend source is mounted into the `app` container and reloads on change. Th
 
 ### 2. Find something to work on
 
+If you've found a security problem, don't open an issue: report it privately as described in [SECURITY.md](SECURITY.md).
+
+
 - Look for issues labelled [`good first issue`](https://github.com/fwdlibraries/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 - Before you build a new feature, open an issue to discuss it.
 
