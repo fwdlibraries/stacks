@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Alert, Badge, Button, Spinner } from 'react-bootstrap'
 import { ListPlus, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
 import {
@@ -21,11 +21,13 @@ import { useCreateFromSource } from '@/api/hooks/useIngest'
 import { useListClicks } from '@/api/hooks/useLinks'
 import { apiErrorMessage } from '@/lib/apiError'
 import { needsAttention } from '@/lib/sourceStatus'
+import { termLabel } from '@/lib/listTerms'
 import { CitationCard } from '@/components/citations/CitationCard'
 import { CitationFormModal } from '@/components/citations/CitationFormModal'
 import { ConfirmModal } from '@/components/common/ConfirmModal'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ListDetailsModal } from '@/components/lists/ListDetailsModal'
+import { CopyListModal } from '@/components/lists/CopyListModal'
 import { BulkImportModal } from '@/components/lists/BulkImportModal'
 import { SectionFormModal } from '@/components/lists/SectionFormModal'
 import { ListDnd, SectionCitations, SortableCitation, SortableSection } from '@/components/lists/SortableList'
@@ -37,6 +39,7 @@ type Dialog =
   | { kind: 'citation'; section: ListSection; citation?: Citation }
   | { kind: 'deleteCitation'; citation: Citation }
   | { kind: 'import' }
+  | { kind: 'copy' }
   | null
 
 const VISIBILITY_LABELS = { public: 'Public', unlisted: 'Unlisted', institution: 'Organization only' }
@@ -47,6 +50,7 @@ const VISIBILITY_LABELS = { public: 'Public', unlisted: 'Unlisted', institution:
  */
 export default function ListEditorView() {
   const { listId = '' } = useParams<{ listId: string }>()
+  const navigate = useNavigate()
   const { data: list, isLoading, isError } = useReadingListFull(listId)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -119,9 +123,18 @@ export default function ListEditorView() {
             </Badge>
           </div>
           {list.description && <p className="text-body-secondary mb-1">{list.description}</p>}
-          <p className="small text-body-secondary mb-0">Visibility: {VISIBILITY_LABELS[list.visibility]}</p>
+          <p className="small text-body-secondary mb-0">
+            {termLabel(list)} · Visibility: {VISIBILITY_LABELS[list.visibility]}
+          </p>
+          {list.copied_from && (
+            <p className="small text-body-secondary mb-0">
+              Copied from <Link to={`/lists/${list.copied_from.id}`}>{list.copied_from.title}</Link>
+              {list.copied_from.term_name ? ` (${list.copied_from.term_name})` : ''}
+              {list.copied_at ? ` on ${new Date(list.copied_at).toLocaleDateString()}` : ''}
+            </p>
+          )}
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2">
           {canEdit && (
             <Button variant="outline-secondary" onClick={() => open({ kind: 'details' })}>
               Edit details
@@ -130,6 +143,11 @@ export default function ListEditorView() {
           {canEdit && list.sections.length > 0 && (
             <Button variant="outline-secondary" onClick={() => open({ kind: 'import' })}>
               Import
+            </Button>
+          )}
+          {list.can_copy && (
+            <Button variant="outline-secondary" onClick={() => open({ kind: 'copy' })}>
+              Copy to another term
             </Button>
           )}
           {canPublish && (
@@ -323,6 +341,17 @@ export default function ListEditorView() {
           onDone={(summary) => {
             setNotice(summary)
             close()
+          }}
+        />
+      )}
+
+      {dialog?.kind === 'copy' && (
+        <CopyListModal
+          list={list}
+          onCancel={close}
+          onCopied={(copy) => {
+            close()
+            navigate(`/lists/${copy.id}`)
           }}
         />
       )}

@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.models import (
@@ -10,13 +9,10 @@ from app.models.models import (
     CourseOffering,
     CourseTemplate,
     Department,
-    ListSection,
-    OfferingListOverride,
     Organization,
-    ReadingList,
 )
 from app.schemas.public import PublicReadingList
-from app.services import links, tenancy
+from app.services import links, tenancy, terms
 
 router = APIRouter()
 
@@ -40,8 +36,8 @@ async def get_public_list(
 ):
     """
     Resolve organization → course (code, case-insensitive) → offering (term) →
-    reading list. An active offering-level override wins; otherwise the course's
-    most recently updated list is used, preferring published lists.
+    reading list: the offering's own section list, an active override, else the
+    course's shared list (terms.offering_list). Published lists are preferred.
 
     Unpublished lists return only their title and `is_published: false`, so the
     student view can say "not published yet" without exposing draft content.
@@ -66,26 +62,7 @@ async def get_public_list(
     if offering is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reading list not found")
 
-    load_sections = selectinload(ReadingList.sections).selectinload(ListSection.citations)
-
-    reading_list = await db.scalar(
-        select(ReadingList)
-        .join(OfferingListOverride, OfferingListOverride.reading_list_id == ReadingList.id)
-        .where(
-            OfferingListOverride.course_offering_id == offering.id,
-            OfferingListOverride.is_active.is_(True),
-        )
-        .options(load_sections)
-        .limit(1)
-    )
-    if reading_list is None:
-        reading_list = await db.scalar(
-            select(ReadingList)
-            .where(ReadingList.course_template_id == offering.course_template_id)
-            .order_by(ReadingList.is_published.desc(), ReadingList.updated_at.desc())
-            .options(load_sections)
-            .limit(1)
-        )
+    reading_list = await terms.offering_list(db, offering, load_sections=True)
 
     if reading_list is None or reading_list.visibility not in PUBLIC_VISIBILITIES:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Reading list not found")

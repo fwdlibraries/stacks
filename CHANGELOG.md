@@ -11,6 +11,13 @@ Stacks uses [Semantic Versioning](https://semver.org/).
 
 There's no release yet. Everything so far is listed here, grouped by area, with the pull request that added it.
 
+### Changed
+- New default look (#30):
+  - Neutral greys, one blue accent and bundled Inter, with WCAG AA contrast throughout. This fixes the failing Slate link and Warm Grey text colours.
+  - Organizations on Custom keep their saved colours, and the classic serif fonts are still offered there.
+- Administration has a left sidebar instead of tabs. Reports shows stat tiles and titled panels (#30).
+- Student reading lists have a course header, an "On this list" section index, soft type badges and link buttons (#30).
+
 ### Added
 
 **Reading lists**
@@ -46,6 +53,18 @@ There's no release yet. Everything so far is listed here, grouped by area, with 
   - LMS registrations, and people and roles (#25)
   - reports (#26)
 - Look and feel for each organization: standard, match the LMS, or custom colours and logo (#27). The match-LMS option has Brightspace, Canvas and Moodle looks (#28).
+
+**Terms and rollover** (see docs/design/rollover.md, #31)
+- Terms (#32):
+  - Administration › Terms manages teaching terms: code, name, dates, and rollover and lists-due dates.
+  - An LMS course code pattern such as `{crn}.{term}` lets launches find their term and section.
+  - Each term of a course can have its own reading list. "Copy to another term" makes a draft copy, and each item keeps its identity across terms.
+  - Existing lists stay shared by every term, as before.
+- Rollover workspace, first part (#33):
+  - Administration › Rollover imports a term's sections from an Alma/Leganto course loader file, and a list of primary shells.
+  - It then finds each section's primary, trying in order: the loader file's `OLD_COURSE_CODE`, a remembered choice, a code rule, or the course's only primary of that length.
+  - Sections it can't match wait under "Needs a source". Librarians choose a primary, which Stacks remembers for later terms, and approve or skip sections one at a time or in bulk.
+  - Column names, the primary code pattern and the table from part-of-term values to lengths are organization settings.
 
 **Development**
 - Project scaffold:

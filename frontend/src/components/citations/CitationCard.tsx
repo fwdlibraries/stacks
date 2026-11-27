@@ -82,7 +82,6 @@ export function CitationCard({
             <Badge
               bg={RESOURCE_TYPE_COLORS[citation.resource_type] ?? 'secondary'}
               className="me-2 mb-1"
-              style={{ fontSize: '0.7rem' }}
             >
               {RESOURCE_TYPE_LABELS[citation.resource_type] ?? citation.resource_type}
             </Badge>
@@ -92,7 +91,7 @@ export function CitationCard({
                 bg="light"
                 text="dark"
                 className="me-2 mb-1"
-                style={{ fontSize: '0.7rem' }}
+               
                 title="Details come from your library's catalogue and update automatically"
               >
                 <Books aria-hidden="true" className="me-1" />
@@ -105,7 +104,7 @@ export function CitationCard({
                 bg="warning"
                 text="dark"
                 className="me-2 mb-1"
-                style={{ fontSize: '0.7rem' }}
+               
                 title={NEEDS_ATTENTION[citation.source_status].explanation}
               >
                 <Warning aria-hidden="true" className="me-1" />
@@ -114,13 +113,13 @@ export function CitationCard({
             )}
 
             {!citation.is_required && (
-              <Badge bg="light" text="dark" className="me-2 mb-1" style={{ fontSize: '0.7rem' }}>
+              <Badge bg="light" text="dark" className="me-2 mb-1">
                 Optional
               </Badge>
             )}
 
             {/* Title */}
-            <Card.Title className="mb-1" style={{ fontSize: '1rem' }}>
+            <Card.Title as="h3" className="mb-1 fs-6 fw-semibold">
               {link ? (
                 <a href={link} target="_blank" rel="noopener noreferrer">
                   {citation.title}
@@ -137,9 +136,7 @@ export function CitationCard({
 
             {/* Student-facing note */}
             {citation.student_note && (
-              <p className="text-muted mt-2 mb-0" style={{ fontSize: '0.875rem' }}>
-                <em>{citation.student_note}</em>
-              </p>
+              <p className="stacks-note small mt-2 mb-0">{citation.student_note}</p>
             )}
 
             {clicks !== undefined && (
@@ -187,16 +184,16 @@ export function CitationCard({
 
         {/* Link button */}
         {link && linkLabel && (
-          <div className="mt-2">
+          <div className="mt-3">
             <Button
-              variant="link"
+              variant={linkPreview ? 'outline-primary' : 'primary'}
               size="sm"
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-0"
+              aria-label={`${linkLabel}: ${citation.title} (opens in a new tab)`}
             >
-              {linkLabel} →
+              {linkLabel}
             </Button>
           </div>
         )}
@@ -224,7 +221,7 @@ function StructuredCitationMeta({ citation }: { citation: Citation }) {
   if (!parts.length) return null
 
   return (
-    <p className="text-muted mb-0" style={{ fontSize: '0.875rem' }}>
+    <p className="text-body-secondary mb-0" style={{ fontSize: '0.875rem' }}>
       {parts.join(' · ')}
     </p>
   )

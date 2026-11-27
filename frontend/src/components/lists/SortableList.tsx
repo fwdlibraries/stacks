@@ -200,7 +200,7 @@ export function SectionCitations({ section, children }: { section: ListSection; 
         className="rounded"
         style={{
           minHeight: draggingCitation ? '3.5rem' : undefined,
-          outline: draggingCitation && isOver ? '2px dashed var(--stacks-sand)' : undefined,
+          outline: draggingCitation && isOver ? '2px dashed var(--bs-primary)' : undefined,
           outlineOffset: '4px',
         }}
       >

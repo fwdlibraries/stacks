@@ -6,8 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.models import Citation, ImportItem, ListSection, LtiDeepLink, ReadingList, User
+from app.models.models import (
+    Citation,
+    CourseTemplate,
+    ImportItem,
+    ListSection,
+    LtiDeepLink,
+    ReadingList,
+    ScopeType,
+    Term,
+    User,
+)
 from app.schemas.lists import (
+    ListCopy,
     ReadingListSummary,
     ReadingListUpdate,
     SectionCreate,
@@ -15,14 +26,31 @@ from app.schemas.lists import (
     SectionUpdate,
     StaffReadingList,
     StaffSection,
+    TermOut,
 )
-from app.services import links
+from app.services import access, links, terms
 from app.services import lists_service as svc
 
 router = APIRouter()
 
 # Access comes from the user's roles and their scopes (app/services/access.py);
-# lists_service checks them on every lookup. Lists are created by LTI launches (for now).
+# lists_service checks them on every lookup. Lists are created by LTI launches and by
+# copying a list into another term.
+
+
+async def _annotate(db: AsyncSession, user: User, reading_list: ReadingList) -> ReadingList:
+    """Add what the user may do with the list, and its term and copy history."""
+    for flag, value in (await svc.permissions_on(db, user, reading_list.id)).items():
+        setattr(reading_list, flag, value)
+    for field, value in (await terms.describe(db, reading_list)).items():
+        if field not in ("kind", "copied_at"):
+            setattr(reading_list, field, value)
+    # Copying into another term needs lists.edit for the whole course (see copy_reading_list)
+    grants = await access.load_grants(db, user)
+    reading_list.can_copy = await access.holds_at(
+        db, grants, "lists.edit", ScopeType.course_template, reading_list.course_template_id
+    )
+    return reading_list
 
 
 # ── Reading lists ────────────────────────────────────────────────────────────
@@ -35,8 +63,7 @@ async def list_reading_lists(
     """Reading lists in the current user's organization, most recently updated first."""
     lists = (await db.scalars((await svc.visible_lists_query(db, current_user)).order_by(ReadingList.updated_at.desc()))).all()
     for reading_list in lists:
-        for flag, value in (await svc.permissions_on(db, current_user, reading_list.id)).items():
-            setattr(reading_list, flag, value)
+        await _annotate(db, current_user, reading_list)
     return lists
 
 
@@ -52,8 +79,7 @@ async def get_reading_list_full(
 ):
     """Compound document: the list, its sections and their citations, including staff notes."""
     reading_list = await svc.get_list(db, current_user, list_id, full=True)
-    for flag, value in (await svc.permissions_on(db, current_user, list_id)).items():
-        setattr(reading_list, flag, value)
+    await _annotate(db, current_user, reading_list)
     return links.annotate(reading_list, await links.load_link_settings(db, current_user.organization_id))
 
 
@@ -103,6 +129,55 @@ async def unpublish_reading_list(
 ):
     """Hide the list's contents from students again."""
     return await _set_published(db, current_user, list_id, False)
+
+
+# ── Terms and copying ────────────────────────────────────────────────────────
+
+@router.get("/terms", response_model=list[TermOut], summary="Terms")
+async def list_terms(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The organization's terms, newest first (for choosing where to copy a list)."""
+    rows = await db.scalars(
+        select(Term)
+        .where(Term.organization_id == current_user.organization_id)
+        .order_by(Term.starts_on.desc().nulls_last(), Term.code.desc())
+    )
+    return rows.all()
+
+
+@router.post(
+    "/lists/{list_id}/copy",
+    response_model=ReadingListSummary,
+    status_code=status.HTTP_201_CREATED,
+    summary="Copy a list into another term",
+)
+async def copy_reading_list(
+    list_id: uuid.UUID,
+    body: ListCopy,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """A draft copy of the list for the same course in another term (and section, if
+    given): details, sections, citations and notes, with the same item keys. Needs
+    lists.edit for the whole course, not just one offering. 409 if that term's
+    section already has its own list."""
+    source = await svc.get_list(db, current_user, list_id)
+    term = await db.scalar(select(Term).where(Term.id == body.term_id, Term.organization_id == current_user.organization_id))
+    if term is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Term not found")
+    grants = await access.load_grants(db, current_user)
+    if not await access.holds_at(db, grants, "lists.edit", ScopeType.course_template, source.course_template_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You don't have permission to make lists for this course")
+    template = await db.get(CourseTemplate, source.course_template_id)
+    offering = await terms.offering_for(db, template, term, body.section)
+    try:
+        copy = await terms.copy_list(db, source.id, offering, current_user)
+    except terms.AlreadyHasList as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"message": f"{term.name} already has its own list for this course", "list_id": str(exc.existing.id)},
+        ) from exc
+    await db.refresh(copy)
+    return await _annotate(db, current_user, copy)
 
 
 # ── Sections ─────────────────────────────────────────────────────────────────

@@ -625,3 +625,83 @@ export function useInvite() {
     }) => (await apiClient.post<Person>("/admin/people/invite", input)).data,
   );
 }
+
+// ── Terms ────────────────────────────────────────────────────────────────────
+
+export interface AdminTerm {
+  id: string;
+  code: string;
+  name: string;
+  starts_on: string | null;
+  ends_on: string | null;
+  rollover_on: string | null;
+  lists_due_on: string | null;
+  /** Courses in this term; its code can't change once there are any */
+  offerings: number;
+}
+
+export type TermInput = Omit<AdminTerm, "id" | "offerings">;
+
+export interface TermsSettings {
+  terms: AdminTerm[];
+  section_code_pattern: string | null;
+}
+
+export interface PatternTry {
+  matches: boolean;
+  error: string | null;
+  term: string | null;
+  term_name: string | null;
+  crn: string | null;
+  section: string | null;
+  course: string | null;
+}
+
+const TERMS = ["admin", "terms"];
+
+export function useTermsSettings() {
+  return useQuery({
+    queryKey: TERMS,
+    queryFn: async () => (await apiClient.get<TermsSettings>("/admin/terms")).data,
+  });
+}
+
+function useTermsMutation<T>(fn: (input: T) => Promise<TermsSettings | void>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (data) => {
+      if (data) queryClient.setQueryData(TERMS, data);
+      queryClient.invalidateQueries({ queryKey: TERMS });
+      queryClient.invalidateQueries({ queryKey: ["terms"] });
+    },
+  });
+}
+
+export function useSaveTerm() {
+  return useTermsMutation(async ({ id, ...input }: TermInput & { id?: string }) =>
+    id
+      ? (await apiClient.put<TermsSettings>(`/admin/terms/${id}`, input)).data
+      : (await apiClient.post<TermsSettings>("/admin/terms", input)).data,
+  );
+}
+
+export function useDeleteTerm() {
+  return useTermsMutation(async (id: string) => {
+    await apiClient.delete(`/admin/terms/${id}`);
+  });
+}
+
+export function useSaveTermPattern() {
+  return useTermsMutation(
+    async (section_code_pattern: string | null) =>
+      (await apiClient.put<TermsSettings>("/admin/terms-pattern", { section_code_pattern })).data,
+  );
+}
+
+export function useTryTermPattern() {
+  return useMutation({
+    mutationFn: async (input: { section_code_pattern: string | null; code: string }) =>
+      (await apiClient.post<PatternTry>("/admin/terms-pattern/try", input)).data,
+  });
+}

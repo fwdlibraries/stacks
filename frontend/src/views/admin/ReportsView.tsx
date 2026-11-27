@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert, Badge, Button, Card, Col, Row, Spinner, Table } from 'react-bootstrap'
 import { useReports, useSyncNow, type Reports } from '@/api/hooks/useAdmin'
@@ -9,15 +10,30 @@ const formatDate = (iso?: string | null) =>
 
 function Stat({ value, label, note }: { value: string | number; label: string; note?: string }) {
   return (
-    <Card className="h-100">
+    <Card className="h-100 stacks-stat">
       <Card.Body>
-        <div className="fs-3 fw-semibold">{value}</div>
-        <div className="small">{label}</div>
+        <div className="text-caps text-body-secondary">{label}</div>
+        <div className="stacks-stat-value mt-1">{typeof value === 'number' ? value.toLocaleString() : value}</div>
         {note && <div className="small text-body-secondary">{note}</div>}
       </Card.Body>
     </Card>
   )
 }
+
+/** A titled panel; tables inside run edge to edge. */
+function Panel({ title, intro, children, className }: { title: string; intro?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <Card className={className}>
+      <Card.Header className="bg-white">
+        <Card.Title as="h2" className="h6 mb-0">{title}</Card.Title>
+        {intro && <div className="small text-body-secondary mt-1">{intro}</div>}
+      </Card.Header>
+      {children}
+    </Card>
+  )
+}
+
+const empty = (text: string) => <Card.Body className="text-body-secondary small">{text}</Card.Body>
 
 const listLink = (id: string, title: string) => <Link to={`/lists/${id}`}>{title}</Link>
 
@@ -31,7 +47,7 @@ export default function ReportsView() {
 
   return (
     <>
-      <p className="text-body-secondary">For the reading lists you can see reports for. Clicks are counted without recording who clicked.</p>
+      <p className="text-body-secondary mt-n2 mb-4">For the reading lists you can see reports for. Clicks are counted without recording who clicked.</p>
       <Row className="g-3 mb-4">
         <Col sm={6} lg={3}><Stat value={o.lists_published} label="Published lists" note={`${o.lists_draft} drafts`} /></Col>
         <Col sm={6} lg={3}><Stat value={o.citations} label="Citations" note={`${o.library_records} library records`} /></Col>
@@ -41,11 +57,11 @@ export default function ReportsView() {
 
       <SyncCard sync={r.sync} />
 
-      <h2 className="h4 mt-4">Need attention</h2>
+      <Panel title="Need attention" intro="Flagged by the catalogue sync." className="mt-4">
       {r.flagged.length === 0 ? (
-        <p className="text-body-secondary">Nothing flagged by the catalogue sync.</p>
+        empty('Nothing flagged by the catalogue sync.')
       ) : (
-        <Table size="sm" responsive>
+        <Table responsive className="mb-0">
           <thead><tr><th scope="col">Citation</th><th scope="col">List</th><th scope="col">Problem</th><th scope="col">Since</th></tr></thead>
           <tbody>
             {r.flagged.map((f) => (
@@ -59,67 +75,75 @@ export default function ReportsView() {
           </tbody>
         </Table>
       )}
+      </Panel>
 
-      <h2 className="h4 mt-4">Hard to reach</h2>
-      <p className="small text-body-secondary">
-        Clicked in the last {r.window_days} days, but mostly couldn’t go straight to the full text: students landed on a
-        catalogue page, the DOI or a menu instead. Open the citation and use <em>Check link</em> to see why.
-      </p>
+      <Panel
+        title="Hard to reach"
+        className="mt-4"
+        intro={<>
+          Clicked in the last {r.window_days} days, but mostly couldn’t go straight to the full text: students landed on a
+          catalogue page, the DOI or a menu instead. Open the citation and use <em>Check link</em> to see why.
+        </>}
+      >
       {r.hard_to_reach.length === 0 ? (
-        <p className="text-body-secondary">None.</p>
+        empty('None.')
       ) : (
-        <Table size="sm" responsive>
-          <thead><tr><th scope="col">Citation</th><th scope="col">List</th><th scope="col">Clicks</th><th scope="col">Not direct</th></tr></thead>
+        <Table responsive className="mb-0">
+          <thead><tr><th scope="col">Citation</th><th scope="col">List</th><th scope="col" className="text-end">Clicks</th><th scope="col" className="text-end">Not direct</th></tr></thead>
           <tbody>
             {r.hard_to_reach.map((h) => (
               <tr key={h.citation_id}>
                 <td>{h.title}</td>
                 <td>{listLink(h.list_id, h.list_title)} › {h.section_title}</td>
-                <td>{h.clicks}</td>
-                <td>{h.fallback_clicks}</td>
+                <td className="text-end tabular-nums">{h.clicks}</td>
+                <td className="text-end tabular-nums">{h.fallback_clicks}</td>
               </tr>
             ))}
           </tbody>
         </Table>
       )}
+      </Panel>
 
-      <Row className="mt-4">
+      <Row className="mt-4 g-3">
         <Col md={6}>
-          <h2 className="h4">Most used lists</h2>
-          {r.top_lists.length === 0 ? <p className="text-body-secondary">No clicks yet.</p> : (
-            <Table size="sm"><tbody>
-              {r.top_lists.map((t) => <tr key={t.list_id}><td>{listLink(t.list_id, t.list_title)}</td><td className="text-end">{t.clicks}</td></tr>)}
+          <Panel title="Most used lists" className="h-100">
+          {r.top_lists.length === 0 ? empty('No clicks yet.') : (
+            <Table className="mb-0"><tbody>
+              {r.top_lists.map((t) => <tr key={t.list_id}><td>{listLink(t.list_id, t.list_title)}</td><td className="text-end tabular-nums">{t.clicks}</td></tr>)}
             </tbody></Table>
           )}
+          </Panel>
         </Col>
         <Col md={6}>
-          <h2 className="h4">Most used citations</h2>
-          {r.top_citations.length === 0 ? <p className="text-body-secondary">No clicks yet.</p> : (
-            <Table size="sm"><tbody>
-              {r.top_citations.map((t) => <tr key={t.citation_id}><td>{t.title}<div className="small text-body-secondary">{t.list_title}</div></td><td className="text-end">{t.clicks}</td></tr>)}
+          <Panel title="Most used citations" className="h-100">
+          {r.top_citations.length === 0 ? empty('No clicks yet.') : (
+            <Table className="mb-0"><tbody>
+              {r.top_citations.map((t) => <tr key={t.citation_id}><td>{t.title}<div className="small text-body-secondary">{t.list_title}</div></td><td className="text-end tabular-nums">{t.clicks}</td></tr>)}
             </tbody></Table>
           )}
+          </Panel>
         </Col>
       </Row>
 
-      <h2 className="h4 mt-4">Recent imports</h2>
-      {r.imports.length === 0 ? <p className="text-body-secondary">None.</p> : (
-        <Table size="sm" responsive>
-          <thead><tr><th scope="col">When</th><th scope="col">List</th><th scope="col">By</th><th scope="col">Entries</th><th scope="col">Added</th><th scope="col">Status</th></tr></thead>
+      <Panel title="Recent imports" className="mt-4">
+      {r.imports.length === 0 ? empty('None.') : (
+        <Table responsive className="mb-0">
+          <thead><tr><th scope="col">When</th><th scope="col">List</th><th scope="col">By</th><th scope="col" className="text-end">Entries</th><th scope="col" className="text-end">Added</th><th scope="col">Status</th></tr></thead>
           <tbody>
             {r.imports.map((i) => (
               <tr key={i.id}>
                 <td className="small">{formatDate(i.created_at)}</td>
                 <td>{i.list_id && i.list_title ? listLink(i.list_id, i.list_title) : '—'}</td>
                 <td>{i.by ?? '—'}</td>
-                <td>{i.total}</td>
-                <td>{i.added ?? '—'}</td>
+                <td className="text-end tabular-nums">{i.total}</td>
+                <td className="text-end tabular-nums">{i.added ?? '—'}</td>
                 <td><Badge bg={i.status === 'completed' ? 'success' : i.status === 'failed' ? 'danger' : 'secondary'}>{i.status.replace('_', ' ')}</Badge></td>
               </tr>
             ))}
           </tbody>
         </Table>
       )}
+      </Panel>
     </>
   )
 }
@@ -132,8 +156,13 @@ function SyncCard({ sync }: { sync: Reports['sync'] }) {
   return (
     <Card>
       <Card.Body className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div className="d-flex gap-3 align-items-start">
+        <span
+          className={`stacks-dot mt-2 bg-${sync.last_status === 'failed' ? 'danger' : sync.last_run_at ? 'success' : 'secondary'}`}
+          aria-hidden="true"
+        />
         <div>
-          <Card.Title as="h2" className="h5 mb-1">Catalogue sync</Card.Title>
+          <Card.Title as="h2" className="h6 mb-1">Catalogue sync</Card.Title>
           <div className="small">
             {sync.last_run_at ? (
               <>
@@ -150,6 +179,7 @@ function SyncCard({ sync }: { sync: Reports['sync'] }) {
             )}{' '}
             Runs every night.
           </div>
+        </div>
         </div>
         {sync.can_run && (
           <div className="text-end">

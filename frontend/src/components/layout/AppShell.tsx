@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useMatch, useNavigate } from 'react-router-dom'
 import { Button, Container, Nav, Navbar } from 'react-bootstrap'
 import { SignOut } from '@phosphor-icons/react'
 import { useCurrentUser, useLogout } from '@/api/hooks/useAuth'
@@ -11,20 +11,22 @@ export function AppShell() {
   const { data: user } = useCurrentUser()
   const tenant = useTenant()
   const logo = logoUrl(tenant.data)
+  // Administration lays out its own sidebar, edge to edge
+  const fullWidth = useMatch('/admin/*') !== null
 
   const handleSignOut = () => {
     logout.mutate(undefined, { onSettled: () => navigate('/login', { replace: true }) })
   }
 
   return (
-    <>
-      <Navbar bg="white" expand="md" className="border-bottom">
-        <Container>
+    <div className="d-flex flex-column min-vh-100">
+      <Navbar bg="white" expand="md" className="border-bottom py-2">
+        <Container fluid className="px-3 px-md-4">
           <Navbar.Brand as={Link} to="/lists" className="d-flex align-items-center gap-2">
             {logo ? (
-              <img src={logo} alt="" style={{ maxHeight: '32px', maxWidth: '160px' }} />
+              <img src={logo} alt="" style={{ maxHeight: '28px', maxWidth: '160px' }} />
             ) : (
-              <img src="/favicon.svg" alt="" width={32} height={32} />
+              <img src="/favicon.svg" alt="" width={28} height={28} />
             )}
             <span className="stacks-wordmark">Stacks</span>
           </Navbar.Brand>
@@ -34,7 +36,7 @@ export function AppShell() {
               <Nav.Link as={NavLink} to="/lists">
                 Reading lists
               </Nav.Link>
-              {(user?.can?.manage_settings || user?.can?.manage_people || user?.can?.view_reports) && (
+              {(user?.can?.manage_settings || user?.can?.manage_courses || user?.can?.manage_people || user?.can?.view_reports) && (
                 <Nav.Link as={NavLink} to="/admin">
                   Administration
                 </Nav.Link>
@@ -59,12 +61,16 @@ export function AppShell() {
         </Container>
       </Navbar>
 
-      <main>
-        <Container className="py-4">
+      <main className="d-flex flex-column flex-grow-1">
+        {fullWidth ? (
           <Outlet />
-        </Container>
+        ) : (
+          <Container className="py-4">
+            <Outlet />
+          </Container>
+        )}
       </main>
-    </>
+    </div>
   )
 }
 
