@@ -47,10 +47,11 @@ def _error_page(message: str, status_code: int = 400, tenant: tenancy.Tenant | N
     body = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Stacks</title>
 <style>
-  body {{ font-family: "Libre Baskerville", Georgia, serif; background: #F7F4EF; color: #2C3E5A;
-         margin: 0; padding: 3rem 1.5rem; line-height: 1.7; }}
-  main {{ max-width: 32rem; margin: 0 auto; }}
-  h1 {{ font-family: "Playfair Display", Georgia, serif; font-weight: 600; font-size: 1.5625rem; }}
+  body {{ font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+         background: #F5F7FA; color: #1B2433; margin: 0; padding: 3rem 1.5rem; line-height: 1.55; }}
+  main {{ max-width: 32rem; margin: 0 auto; background: #FFFFFF; border: 1px solid #E3E7ED;
+          border-radius: 8px; padding: 1.5rem 1.75rem; }}
+  h1 {{ font-weight: 650; font-size: 1.375rem; letter-spacing: -0.01em; margin-top: 0; }}
 </style></head>
 <body><main><h1>Stacks couldn't open</h1><p>{html.escape(message)}</p></main></body></html>"""
     # Shown inside the LMS frame: allow the organization's LMS origins

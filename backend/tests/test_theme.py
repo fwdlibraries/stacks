@@ -43,6 +43,20 @@ def test_contrast():
     assert [w.split(":")[0] for w in theme.contrast_warnings(low)] == ["Text on the page background", "Text on cards and panels"]
 
 
+def test_default_look_meets_aa():
+    assert theme.contrast_warnings(theme.ThemeTokens()) == []
+    for preset, _ in theme.PRESETS.values():
+        assert theme.contrast_warnings(preset.tokens) == [], preset.label
+
+
+def test_soft_badges_follow_the_primary_color():
+    css = theme.tokens_css(theme.ThemeTokens(primary="#C0392B"))
+    tint = theme.mix("#C0392B", "#FFFFFF", 0.85)
+    assert f"--bs-primary-bg-subtle: {tint};" in css
+    emphasis = css.split("--bs-primary-text-emphasis: ")[1].split(";")[0]
+    assert theme.contrast(emphasis, tint) >= 7
+
+
 def test_render_by_mode():
     assert "--bs-primary" not in theme.render_css(theme.ThemeSettings())  # standard: nothing to override
     # Match LMS with no LMS known yet: the institution's color over the Stacks look

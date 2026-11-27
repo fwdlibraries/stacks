@@ -9,8 +9,8 @@ interface EmptyStateProps {
 }
 
 /**
- * Empty state pattern from the style guide: Duotone Phosphor icon in Warm Grey,
- * a short Playfair heading, one sentence of body text, and an optional action.
+ * Empty state pattern from the style guide: Duotone Phosphor icon in secondary grey,
+ * a short heading, one sentence of body text, and an optional action.
  */
 export function EmptyState({ icon: IconComponent, heading, children, action }: EmptyStateProps) {
   return (
@@ -18,7 +18,7 @@ export function EmptyState({ icon: IconComponent, heading, children, action }: E
       <IconComponent
         size={48}
         weight="duotone"
-        color="var(--stacks-warm-grey)"
+        color="var(--stacks-muted)"
         aria-hidden="true"
         className="mb-3"
       />
