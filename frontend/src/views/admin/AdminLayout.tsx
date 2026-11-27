@@ -13,6 +13,7 @@ const SECTIONS: { group: string; need: Need; pages: { to: string; label: string 
       { to: "/admin", label: "Organization" },
       { to: "/admin/look", label: "Look and feel" },
       { to: "/admin/signin", label: "Sign-in" },
+      { to: "/admin/terms", label: "Terms" },
       { to: "/admin/connections", label: "Library connections" },
       { to: "/admin/links", label: "Link resolution" },
       { to: "/admin/lms", label: "LMS" },

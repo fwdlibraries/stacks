@@ -39,6 +39,18 @@ class OrgSettings(BaseModel):
     # ({content_type, data: base64}); kept here so saving other settings keeps them
     theme: dict | None = None
     logo: dict | None = None
+    # How live LMS course shells are coded, e.g. "{crn}.{term}" (app/services/terms.py)
+    section_code_pattern: str | None = None
+
+    @field_validator("section_code_pattern")
+    @classmethod
+    def _pattern(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        from app.services.terms import compile_pattern  # terms imports this module
+
+        compile_pattern(value.strip())  # PatternError is a ValueError
+        return value.strip()
 
     @field_validator("frame_ancestors")
     @classmethod

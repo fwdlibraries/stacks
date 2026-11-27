@@ -16,6 +16,7 @@ import PeopleView from "@/views/admin/PeopleView";
 import ReportsView from "@/views/admin/ReportsView";
 import LookAndFeelView from "@/views/admin/LookAndFeelView";
 import SignInView from "@/views/admin/SignInView";
+import TermsView from "@/views/admin/TermsView";
 
 /** Routes for the editor SPA (index.html). Student URLs under /public/ use public.html. */
 export const editorRoutes: RouteObject[] = [
@@ -40,6 +41,7 @@ export const editorRoutes: RouteObject[] = [
           { index: true, element: <OrganizationView /> },
           { path: "look", element: <LookAndFeelView /> },
           { path: "signin", element: <SignInView /> },
+          { path: "terms", element: <TermsView /> },
           { path: "connections", element: <ConnectionsView /> },
           { path: "links", element: <LinkResolutionView /> },
           { path: "lms", element: <LmsView /> },

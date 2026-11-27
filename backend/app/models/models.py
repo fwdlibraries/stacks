@@ -1,11 +1,12 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     ARRAY,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -132,19 +133,45 @@ class CourseTemplate(Base):
     reading_lists: Mapped[list["ReadingList"]] = relationship(back_populates="course_template")
 
 
+class Term(Base):
+    """A teaching term (app/services/terms.py). `code` is what offerings and student URLs
+    use: the SIS term code where there is one (e.g. 202710), else a slug (fall-2027)."""
+    __tablename__ = "terms"
+    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_terms_organization_code"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    starts_on: Mapped[date | None] = mapped_column(Date)
+    ends_on: Mapped[date | None] = mapped_column(Date)
+    # When rollover copies lists for this term, and when lists are due for review
+    rollover_on: Mapped[date | None] = mapped_column(Date)
+    lists_due_on: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CourseOffering(Base):
+    """A course in one term: a live section, usually one LMS course shell."""
     __tablename__ = "course_offerings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     course_template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("course_templates.id"), nullable=False)
+    # Term.code (kept as text: student URLs use it); term_id links the Term record
     term: Mapped[str] = mapped_column(Text, nullable=False)
+    term_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("terms.id"), index=True)
     section: Mapped[str | None] = mapped_column(Text)
+    # The LMS course shell's code (LTI context label), e.g. 40112.202710
+    lms_code: Mapped[str | None] = mapped_column(Text, index=True)
     lti_context_id: Mapped[str | None] = mapped_column(Text)
     lti_deployment_id: Mapped[str | None] = mapped_column(Text)
     external_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     template: Mapped[CourseTemplate] = relationship(back_populates="offerings")
+    term_record: Mapped["Term | None"] = relationship()
 
 
 # ─── Reading Lists ─────────────────────────────────────────────────────────────
@@ -154,6 +181,17 @@ class ReadingList(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     course_template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("course_templates.id"), nullable=False)
+    # 'course': shared by every term of the course (lists made before terms had their own)
+    # 'section': one offering's list (course_offering_id); 'primary': a course variant's primary
+    kind: Mapped[str] = mapped_column(Text, nullable=False, default="course", server_default="course")
+    course_offering_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id"), index=True
+    )
+    # Where this list was copied from (rollover); kept if the source is deleted
+    copied_from_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("reading_lists.id", ondelete="SET NULL")
+    )
+    copied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     title: Mapped[str] = mapped_column(Text, nullable=False, default="Course Reading List")
     description: Mapped[str | None] = mapped_column(Text)
     visibility: Mapped[str] = mapped_column(Text, nullable=False, default="public")
@@ -163,6 +201,7 @@ class ReadingList(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     course_template: Mapped[CourseTemplate] = relationship(back_populates="reading_lists")
+    offering: Mapped["CourseOffering | None"] = relationship()
     sections: Mapped[list["ListSection"]] = relationship(back_populates="reading_list", order_by="ListSection.sort_order")
 
 
@@ -174,6 +213,10 @@ class ListSection(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # The same item across copies of a list (rollover): reports and links follow it
+    item_key: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, default=uuid.uuid4, server_default=text("gen_random_uuid()")
+    )
 
     reading_list: Mapped[ReadingList] = relationship(back_populates="sections")
     citations: Mapped[list["Citation"]] = relationship(back_populates="section", order_by="Citation.sort_order")
@@ -197,6 +240,10 @@ class Citation(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     list_section_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("list_sections.id"), nullable=False)
     resource_type: Mapped[ResourceType] = mapped_column(SAEnum(ResourceType), nullable=False)
+    # The same item across copies of a list (rollover): reports and links follow it
+    item_key: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, default=uuid.uuid4, server_default=text("gen_random_uuid()")
+    )
 
     # Universal fields
     title: Mapped[str] = mapped_column(Text, nullable=False)

@@ -5,7 +5,6 @@ signature is checked against the platform's JWKS, then iss, aud/azp, exp/iat,
 nonce, LTI version, message type and deployment are checked explicitly.
 """
 import hashlib
-import re
 import uuid
 from functools import lru_cache
 from urllib.parse import quote, urlencode, urlsplit
@@ -24,11 +23,11 @@ from app.models.models import (
     LtiDeployment,
     LtiPlatform,
     LtiUserMapping,
-    OfferingListOverride,
     Organization,
     ReadingList,
     User,
 )
+from app.services import terms
 
 LTI_CLAIM = "https://purl.imsglobal.org/spec/lti/claim/"
 CLAIM_MESSAGE_TYPE = LTI_CLAIM + "message_type"
@@ -157,14 +156,16 @@ def is_staff(claims: dict) -> bool:
     return any(str(role).endswith(STAFF_ROLE_SUFFIXES) for role in claims.get(CLAIM_ROLES) or [])
 
 
-def term_from(claims: dict) -> str:
-    """URL-safe term slug from the `term` custom parameter, else 'current'."""
-    raw = str((claims.get(CLAIM_CUSTOM) or {}).get("term") or "")
+def custom_term(claims: dict) -> str:
+    """The `term` custom parameter as given ('' if unset or not substituted)."""
+    raw = str((claims.get(CLAIM_CUSTOM) or {}).get("term") or "").strip()
     # Unsubstituted LMS variables arrive literally, e.g. "$Canvas.term.name"
-    if raw.startswith("$"):
-        raw = ""
-    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
-    return slug or DEFAULT_TERM
+    return "" if raw.startswith("$") else raw
+
+
+def term_from(claims: dict) -> str:
+    """URL-safe term code from the `term` custom parameter, else 'current'."""
+    return terms.slug(custom_term(claims)) or DEFAULT_TERM
 
 
 # ── Provisioning ─────────────────────────────────────────────────────────────
@@ -247,44 +248,68 @@ async def find_offering(db: AsyncSession, deployment: LtiDeployment, claims: dic
 async def provision_offering(
     db: AsyncSession, deployment: LtiDeployment, organization_id: uuid.UUID, claims: dict
 ) -> CourseOffering:
-    """Find or create the course, offering and context mapping for this LMS course."""
+    """Find or create the course, offering and context mapping for this LMS course.
+
+    In order: a course shell already mapped; an offering in the same term with exactly
+    this LMS course code (made ahead of term, e.g. by rollover); else the course by code
+    and the offering for its term. The term comes from the organization's section code pattern
+    ("{crn}.{term}"), else the `term` custom parameter, else 'current'."""
     offering = await find_offering(db, deployment, claims)
     if offering is not None:
         return offering
 
     context = require_context(claims)
+    label = str(context.get("label") or "").strip() or None
     code = str(context.get("label") or context.get("title") or context["id"]).strip()
     title = str(context.get("title") or code).strip()
-    term = term_from(claims)
 
-    # Reuse a course with the same code in this organization (e.g. the next term)
-    template = await db.scalar(
-        select(CourseTemplate)
-        .join(CourseTemplate.department)
-        .join(Department.college)
-        .where(College.organization_id == organization_id, func.lower(CourseTemplate.code) == code.lower())
-        .limit(1)
-    )
-    if template is None:
-        department = await _default_department(db, organization_id)
-        template = CourseTemplate(department_id=department.id, code=code, name=title)
-        db.add(template)
-        await db.flush()
+    parsed = terms.parse_section_code(await terms.section_code_pattern(db, organization_id), label)
+    if parsed:
+        term = await terms.find_or_create_term(db, organization_id, parsed.term)
+    else:
+        raw = custom_term(claims)
+        term = await terms.find_or_create_term(db, organization_id, terms.slug(raw) or DEFAULT_TERM, raw or None)
 
-    offering = await db.scalar(
-        select(CourseOffering).where(
-            CourseOffering.course_template_id == template.id, CourseOffering.term == term
-        ).limit(1)
-    )
-    if offering is None:
-        offering = CourseOffering(
-            course_template_id=template.id,
-            term=term,
-            lti_context_id=str(context["id"]),
-            lti_deployment_id=deployment.deployment_id,
+    offering = None
+    if label:
+        # Exactly this shell code in this term. (Within the term: where shells are coded
+        # by course alone, every term's shell has the same code.)
+        offering = await db.scalar(
+            select(CourseOffering)
+            .join(CourseOffering.template)
+            .join(CourseTemplate.department)
+            .join(Department.college)
+            .where(
+                College.organization_id == organization_id,
+                func.lower(CourseOffering.lms_code) == label.lower(),
+                CourseOffering.term == term.code,
+            )
+            .limit(1)
         )
-        db.add(offering)
-        await db.flush()
+
+    if offering is None:
+        course_code = (parsed.course if parsed and parsed.course else code).strip()
+
+        # Reuse a course with the same code in this organization (e.g. the next term)
+        template = await db.scalar(
+            select(CourseTemplate)
+            .join(CourseTemplate.department)
+            .join(Department.college)
+            .where(College.organization_id == organization_id, func.lower(CourseTemplate.code) == course_code.lower())
+            .limit(1)
+        )
+        if template is None:
+            department = await _default_department(db, organization_id)
+            template = CourseTemplate(department_id=department.id, code=course_code, name=title)
+            db.add(template)
+            await db.flush()
+
+        section = parsed.crn or parsed.section if parsed else None
+        offering = await terms.offering_for(db, template, term, section)
+        offering.lti_context_id = offering.lti_context_id or str(context["id"])
+        offering.lti_deployment_id = offering.lti_deployment_id or deployment.deployment_id
+    if label and not offering.lms_code:
+        offering.lms_code = label
 
     db.add(
         LtiContextMapping(
@@ -304,26 +329,17 @@ async def list_for_offering(
     db: AsyncSession, offering: CourseOffering, *, create_for: User | None = None
 ) -> ReadingList | None:
     """
-    The offering's reading list: an active override, else the course's list
-    (published first, then most recent). Creates a draft list if `create_for` is given.
+    The offering's reading list (terms.offering_list: its own section list, an active
+    override, else the course's shared list). Creates a draft course list if `create_for`
+    is given and there is none, as before terms had their own lists: making per-term
+    lists is rollover's job, or "Copy to another term" in the editor.
     """
-    reading_list = await db.scalar(
-        select(ReadingList)
-        .join(OfferingListOverride, OfferingListOverride.reading_list_id == ReadingList.id)
-        .where(OfferingListOverride.course_offering_id == offering.id, OfferingListOverride.is_active.is_(True))
-        .limit(1)
-    )
-    if reading_list is None:
-        reading_list = await db.scalar(
-            select(ReadingList)
-            .where(ReadingList.course_template_id == offering.course_template_id)
-            .order_by(ReadingList.is_published.desc(), ReadingList.updated_at.desc())
-            .limit(1)
-        )
+    reading_list = await terms.offering_list(db, offering)
     if reading_list is None and create_for is not None:
         template = await db.get(CourseTemplate, offering.course_template_id)
         reading_list = ReadingList(
             course_template_id=template.id,
+            kind="course",
             title=f"{template.name} Reading List",
             visibility="public",
             is_published=False,
