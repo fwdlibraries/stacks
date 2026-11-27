@@ -330,7 +330,7 @@ function InviteCard({ roles, scopes }: { roles: string[]; scopes: Scope[] }) {
           size="sm"
           style={{ maxWidth: "14rem" }}
           aria-label="Email"
-          placeholder="name@csp.edu"
+          placeholder="name@example.edu"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />

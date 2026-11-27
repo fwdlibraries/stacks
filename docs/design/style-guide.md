@@ -173,7 +173,7 @@ Stacks uses React Bootstrap as its component library. The following principles g
 - **Density:** Prefer comfortable density over compact. Give elements room to breathe.
 - **Borders over shadows:** White panels on the grey page, separated by 1px Line (`#E3E7ED`) borders, no shadows. Shadows are reserved for elevated elements (modals, dropdowns).
 - **Rounded corners:** 6px for buttons and inputs, 8px for cards and panels. Badges are pills.
-- **Layout:** Administration uses a left sidebar (grouped: Settings, People, Insights) that moves above the content on small screens. Reading lists are a single column of cards with an "On this list" section index beside them (above them on phones) when there is more than one section.
+- **Layout:** Administration uses a left sidebar (grouped: Settings, Courses, People, Insights) that moves above the content on small screens. Reading lists are a single column of cards with an "On this list" section index beside them (above them on phones) when there is more than one section.
 - **Stat tiles:** a small all-caps label, a large tabular number, and one line of context.
 
 ### Cards (CitationCard)

@@ -186,7 +186,7 @@ function SsoForm({ saved }: { saved: SsoSettings }) {
               <Form.Control
                 value={domains}
                 onChange={(e) => setDomains(e.target.value)}
-                placeholder="csp.edu"
+                placeholder="example.edu"
               />
               <Form.Text>
                 Invitations and new accounts must be in these domains.
