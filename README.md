@@ -35,10 +35,14 @@ Instructors and librarians build reading lists in Stacks. The lists open inside 
 **Administration**
 - **Roles:** Administrator, Librarian, Instructor and Viewer. A role can apply to the whole organization, a college, a department or a single course.
 - **Sign-in:** email and password, or single sign-on with OpenID Connect ([Entra setup guide](docs/sso/entra.md)). Entra app roles can be mapped to Stacks roles.
-- **Settings screens:** the organization, library connections, link resolution, LMS registrations, people, and reports.
+- **Settings screens:** the organization, look and feel, sign-in, terms, library connections, link resolution, LMS registrations, rollover, people, and reports.
 - **Several organizations:** one installation can serve several, each recognized by its own web address.
 
-**In development:** term rollover, with per-term reading lists and a workspace for copying lists from primary courses each term.
+**Terms and rollover** ([design](docs/design/rollover.md))
+- Each term of a course can have its own reading list, copied from an earlier term. Each reading keeps its identity across copies.
+- LMS course codes such as `{crn}.{term}` tell Stacks which term and section a launch is for.
+- The rollover workspace imports a term's sections (from an Alma/Leganto course loader file) and your primary course shells, then matches each section to its primary. Sections it can't match wait under "Needs a source" for a librarian to choose, and Stacks remembers the choice for later terms.
+- Still to come: copying approved lists on a schedule, policies, and archiving finished terms.
 
 ## Quick start
 
