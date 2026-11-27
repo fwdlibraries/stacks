@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = 15
 
     # LTI
-    lti_private_key_storage: str = "database"  # 'database' | 'aws_secrets'
     # Where browsers reach Stacks (the frontend origin). Used for the LTI redirect_uri
     # and the tool URLs printed at registration. Dev: Vite on :5173 proxies /lti.
     public_base_url: str = "http://localhost:5173"

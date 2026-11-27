@@ -24,7 +24,7 @@ from app.models.models import (
     ReadingList,
     User,
 )
-from app.services import lti_service
+from app.services import credentials, lti_service
 from app.services.ephemeral import MemoryStore, get_ephemeral_store
 from app.services.lti_service import generate_tool_keys
 
@@ -52,7 +52,7 @@ async def platform(db_session: AsyncSession, monkeypatch):
         auth_login_url="https://lms.example.edu/auth",
         auth_token_url="https://lms.example.edu/token",
         jwks_url="https://lms.example.edu/jwks",
-        tool_private_key=private_pem,
+        tool_private_key_encrypted=credentials.encrypt(private_pem),
         tool_public_key=public_pem,
         tool_key_id="tool-kid",
     )

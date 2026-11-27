@@ -657,9 +657,10 @@ class LtiPlatform(Base):
     auth_login_url: Mapped[str] = mapped_column(Text, nullable=False)
     auth_token_url: Mapped[str] = mapped_column(Text, nullable=False)
     jwks_url: Mapped[str] = mapped_column(Text, nullable=False)
-    # TODO: encrypt like library API keys (app/services/credentials.py). Plain PEM today;
-    # only the public key is used so far (published at /lti/jwks).
-    tool_private_key: Mapped[str] = mapped_column(Text, nullable=False)
+    # The tool's signing key (PEM), encrypted like library API keys
+    # (app/services/credentials.py). Read it with lti_service.tool_private_key(); the
+    # public key is published at /lti/jwks.
+    tool_private_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     tool_public_key: Mapped[str] = mapped_column(Text, nullable=False)
     tool_key_id: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

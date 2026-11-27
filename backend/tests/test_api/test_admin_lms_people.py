@@ -13,7 +13,7 @@ from app.models.models import (
     OrganizationDomain,
     ScopeType,
 )
-from app.services import access
+from app.services import access, lti_service
 from tests.test_api.test_admin import person, sign_in
 
 BRIGHTSPACE = {
@@ -71,7 +71,9 @@ async def test_register_and_manage_an_lms(client, db_session, uni):
     assert [d["deployment_id"] for d in platform["deployments"]] == ["dep-1"]  # de-duplicated, blanks dropped
     assert "tool_private_key" not in str(resp.json())
     stored = await db_session.scalar(select(LtiPlatform))
-    assert stored.tool_private_key.startswith("-----BEGIN PRIVATE KEY-----")
+    # Encrypted at rest, and still readable for signing
+    assert "PRIVATE KEY" not in stored.tool_private_key_encrypted
+    assert lti_service.tool_private_key(stored).startswith("-----BEGIN PRIVATE KEY-----")
     # The new key is published for the LMS
     jwks = (await client.get("/lti/jwks")).json()
     assert stored.tool_key_id in [k["kid"] for k in jwks["keys"]]
@@ -102,7 +104,7 @@ async def test_register_and_manage_an_lms(client, db_session, uni):
 async def test_lms_is_organization_scoped_and_admin_only(client, db_session, uni):
     other_platform = LtiPlatform(organization_id=uni["other"].id, issuer="https://other.edu", client_id="o",
                                  auth_login_url="https://other.edu/a", auth_token_url="https://other.edu/t",
-                                 jwks_url="https://other.edu/j", tool_private_key="x", tool_public_key="x", tool_key_id="k")
+                                 jwks_url="https://other.edu/j", tool_private_key_encrypted="x", tool_public_key="x", tool_key_id="k")
     db_session.add(other_platform)
     await db_session.commit()
     await org_admin(client, db_session, uni)

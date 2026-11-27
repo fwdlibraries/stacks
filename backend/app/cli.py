@@ -28,7 +28,6 @@ import argparse
 import asyncio
 import getpass
 import sys
-import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select
@@ -44,7 +43,7 @@ from app.models.models import (
     UserIdentity,
 )
 from app.services.auth_service import BCRYPT_MAX_BYTES, AuthService
-from app.services.lti_service import generate_tool_keys
+from app.services.lti_service import new_tool_keys
 
 MIN_PASSWORD_LENGTH = 12
 ROLE_CHOICES = ["Administrator", "Librarian", "Instructor", "Viewer"]
@@ -113,7 +112,6 @@ async def register_lti_platform(args: argparse.Namespace) -> None:
             missing = [f for f in ("auth_login_url", "auth_token_url", "jwks_url") if not getattr(args, f)]
             if missing:
                 sys.exit("New registrations need " + ", ".join("--" + m.replace("_", "-") for m in missing) + ".")
-            private_pem, public_pem = generate_tool_keys()
             platform = LtiPlatform(
                 organization_id=org.id,
                 issuer=args.issuer,
@@ -121,9 +119,7 @@ async def register_lti_platform(args: argparse.Namespace) -> None:
                 auth_login_url=args.auth_login_url,
                 auth_token_url=args.auth_token_url,
                 jwks_url=args.jwks_url,
-                tool_private_key=private_pem,
-                tool_public_key=public_pem,
-                tool_key_id=uuid.uuid4().hex,
+                **new_tool_keys(),
             )
             db.add(platform)
             await db.flush()
