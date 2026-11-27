@@ -9,16 +9,49 @@ Stacks uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+There's no release yet. Everything so far is listed here, grouped by area, with the pull request that added it.
+
 ### Added
-- Initial project scaffold
-- Database schema for org hierarchy, reading lists, citations, users, LTI
-- FastAPI backend with health endpoints
-- Z39.50 import handler via YAZ sidecar
-- Manual citation entry with DOI/Open Library lookup assist
-- Import pipeline with staging/review flow
-- React + Vite frontend scaffold with public list view
-- CitationCard component with structured display
-- WebSocket client with reconnection logic
-- Docker Compose dev and production configurations
-- GitHub Actions CI and Docker image build workflows
-- Architecture design document
+
+**Reading lists**
+- Lists, sections and citations that can be edited, with drafts and publishing (#6), and drag-and-drop reordering (#7).
+- Public list pages for students, with a demo list seeded in development (#4).
+- Lists can be seen only within your organization, and editing is limited by role (#5, #22).
+
+**Adding citations**
+- Manual entry, with DOI and Open Library lookups to fill in the details.
+- A lookup pipeline over Alma, Primo, Crossref and Open Library, configured per organization (#12, #13), and library search in the add-citation dialog (#14).
+- Bulk import: paste or upload references (RIS, BibTeX or plain text), review the matches, then add them (#18).
+- A browser extension for Chrome, Edge and Firefox that adds the page you're viewing to a list (#19).
+- An optional Z39.50 import through a YAZ gateway (`--profile z3950`).
+
+**Links and the catalogue**
+- Student links built from the current discovery settings (#15).
+- Links resolved when a student clicks, trying in order: LibKey, the Alma link resolver, open access (OpenAlex), then a fallback. Clicks are counted anonymously (#16).
+- A nightly sync for citations linked to Alma records (#17), and "Sync now" with operations reports (#26).
+
+**LMS**
+- LTI 1.3 launches: a course is set up in Stacks the first time the LMS opens it, and people are signed in from the LMS (#8).
+- Stacks can be shown in an LMS frame, using CSP `frame-ancestors` (#9).
+
+**Accounts and access**
+- Email and password sign-in (#5), paused after repeated failed attempts (#21).
+- Roles (Administrator, Librarian, Instructor, Viewer). A role can apply to the whole organization, a college, a department or one course (#22).
+- Single sign-on with OpenID Connect, for Entra and other providers, with an optional mapping from Entra app roles to Stacks roles (#29). See docs/sso/entra.md.
+
+**Organizations and administration**
+- Requests are matched to an organization by hostname, and each organization has its own settings (#23).
+- Administration screens:
+  - organization, library connections and link resolution (#24)
+  - LMS registrations, and people and roles (#25)
+  - reports (#26)
+- Look and feel for each organization: standard, match the LMS, or custom colours and logo (#27). The match-LMS option has Brightspace, Canvas and Moodle looks (#28).
+
+**Development**
+- Project scaffold:
+  - backend: FastAPI and the database schema
+  - frontend: React and Vite, with separate editor and public apps (#3)
+  - Docker Compose for development and production (#2), and a first database migration (#4)
+- GitHub Actions CI for the backend, frontend, extension and Docker images (#10).
+- A dev site behind a Cloudflare tunnel, serving a production build behind a hardened proxy (#11, #20).
+- `.env.example`, and working README references (#1).

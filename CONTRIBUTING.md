@@ -1,8 +1,8 @@
 # Contributing to Stacks
 
-Thank you for your interest in contributing! Stacks is an open-source project and we welcome contributions of all kinds — bug fixes, new features, documentation improvements, and more.
+Thank you for your interest in contributing! Stacks is open source, and we welcome bug fixes, features, documentation and design work.
 
-## Getting Started
+## Getting started
 
 ### 1. Set up your development environment
 
@@ -12,108 +12,123 @@ cd stacks
 ./scripts/setup-dev.sh
 ```
 
-See the [Development Guide](#development-guide) below for more detailed commands.
+This starts everything in Docker and adds a demo reading list (see the [README](README.md#quick-start)). The commands below assume the dev stack is running. For brevity:
+
+```bash
+COMPOSE="docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml"
+```
+
+The backend source is mounted into the `app` container and reloads on change. The frontend dev server at http://localhost:5173 reloads too.
 
 ### 2. Find something to work on
 
-- Check [`good first issue`](https://github.com/fwdlibraries/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) for beginner-friendly tasks
-- Open an issue to discuss a new feature before building it
+- Look for issues labelled [`good first issue`](https://github.com/fwdlibraries/stacks/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+- Before you build a new feature, open an issue to discuss it.
 
 ### 3. Make your changes
 
-- Create a branch: `git checkout -b your-feature-name`
-- Write tests for new functionality
-- Ensure existing tests pass: `cd backend && pytest`
-- Run linting: `cd backend && ruff check .`
-- Run frontend typecheck: `cd frontend && npm run typecheck`
+- Create a branch: `git checkout -b feat/your-change`.
+- Add tests for what you change, and run the checks below. CI runs the same ones.
+- Add a line to [CHANGELOG.md](CHANGELOG.md) under *Unreleased* if users or administrators would notice the change.
+- Interface text follows the [style guide](docs/design/style-guide.md): its colours, components, voice and terms.
 
-### 4. Submit a pull request
+### 4. Open a pull request
 
-- Fill in the pull request template
-- Link to any relevant issues
-- PRs require passing CI before merge
+- Explain what changed and why, and how you tested it. Link related issues.
+- CI must pass before merging.
 
-## Development Guide
+## Checks
 
 ### Backend
+
+Tests need their own PostgreSQL database, so they never touch your dev data. Its tables are created and dropped around each test. Create the database once:
+
+```bash
+$COMPOSE exec db createdb -U stacks stacks_test
+```
+
+Then run the tests in the `app` container:
+
+```bash
+$COMPOSE exec app pip install pytest pytest-asyncio ruff   # once per container rebuild
+$COMPOSE exec -e TEST_DATABASE_URL=postgresql+asyncpg://stacks:<POSTGRES_PASSWORD>@db:5432/stacks_test \
+  app pytest -q
+$COMPOSE exec app ruff check --no-cache .   # the container user can't write a cache to the source mount
+```
+
+Or outside Docker, with Python 3.12 and a reachable PostgreSQL:
 
 ```bash
 cd backend
 pip install -e ".[dev]"
-
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=app
-
-# Lint
+TEST_DATABASE_URL=postgresql+asyncpg://stacks:stacks@localhost:5432/stacks_test pytest -q
 ruff check .
-
-# Type check
-mypy app
-
-# Generate a new migration after changing models
-alembic revision --autogenerate -m "describe your change"
 ```
 
 ### Frontend
 
 ```bash
 cd frontend
-npm install
-
-# Dev server (proxies API to localhost:8000)
-npm run dev
-
-# Typecheck
 npm run typecheck
-
-# Lint
-npm run lint
-
-# Regenerate TypeScript types from API spec (requires backend running)
-npm run generate-types
+npm run lint        # no warnings allowed
+npx vitest run
+npm run build
 ```
 
-### Database Migrations
+API types live next to the hooks that call the API (`src/api/hooks/`). Keep them in step with the backend's response models.
 
-Migrations run explicitly — they never run automatically on startup. Run these from the repo root:
+### Browser extension
 
 ```bash
-COMPOSE="docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml"
-
-# Apply all pending migrations
-$COMPOSE exec app alembic upgrade head
-
-# Create a new migration after changing SQLAlchemy models
-$COMPOSE exec app alembic revision --autogenerate -m "add widget table"
-
-# Downgrade one step
-$COMPOSE exec app alembic downgrade -1
+cd extension
+npm ci
+npm run check
+npm test
 ```
 
-### Adding a New Import Handler
+See [extension/README.md](extension/README.md) to load it in a browser.
 
-1. Create `backend/app/importers/your_source.py`
-2. Extend `ImportHandler` from `app.importers.base`
-3. Implement `fetch()` and `normalize()`
-4. Register it in `app/importers/__init__.py`
-5. Add a router endpoint in `app/routers/imports.py`
-6. Add tests in `tests/test_importers/`
+## Database migrations
 
-See `app/importers/z3950.py` for a reference implementation.
+Migrations never run on startup.
 
-## Code Style
+```bash
+$COMPOSE exec app alembic upgrade head        # apply pending migrations
+$COMPOSE exec app alembic revision --autogenerate -m "add widget table"
+$COMPOSE exec app alembic downgrade -1        # undo the last one
+```
 
-- **Python**: [Ruff](https://github.com/astral-sh/ruff) for linting and formatting. Line length: 100.
-- **TypeScript**: ESLint with React Hooks plugin.
-- **Commits**: Conventional commits preferred (`feat:`, `fix:`, `docs:`, `chore:`)
+Read every autogenerated migration before committing it. CI applies all migrations, checks they match the models (`alembic check`), and rolls them all back, so each migration needs a working `downgrade()`.
 
-## Architecture Decisions
+## Where things live
 
-Before making significant architectural changes, please open an issue to discuss them. New significant decisions should be recorded as ADRs in `docs/architecture/`.
+| Area | Location |
+|---|---|
+| API routes | `backend/app/routers/` |
+| Business logic | `backend/app/services/` |
+| Database models | `backend/app/models/models.py`, migrations in `backend/migrations/versions/` |
+| Citation lookup and matching (Alma, Primo, Crossref, Open Library) | `backend/app/ingest/`. Lookup sources are in `ingest/resolvers/`, and the order they're tried in is `CHAIN` in `ingest/resolvers/__init__.py`. |
+| Click-time link resolution | `backend/app/services/resolution.py` |
+| Background jobs (Celery) | `backend/app/tasks/` |
+| Z39.50 import | `backend/app/importers/` |
+| Admin command line | `backend/app/cli.py` (`python -m app.cli --help`) |
+| Editor and admin screens | `frontend/src/views/` |
+| Student list pages | `frontend/src/views/public/` |
+| Design documents | `docs/design/` |
+
+### Adding a citation source
+
+1. Subclass `Resolver` from `app/ingest/resolvers/base.py`. Set `system`, and implement the lookups your source supports.
+2. Add it to `CHAIN`, or to `BY_SYSTEM` only if it should never be tried automatically.
+3. Add tests under `backend/tests/test_ingest/`. They use the fake HTTP client in `fake_http.py`, so no test calls a real service.
+
+## Code style
+
+- **Python:** [Ruff](https://github.com/astral-sh/ruff), with the rules set in `backend/pyproject.toml`. Long lines are allowed, but keep them readable.
+- **TypeScript:** ESLint with the React Hooks rules, and no warnings.
+- **Commit messages:** a short, plain summary line in the imperative, such as "Pause password sign-in after repeated failures", then a body that explains why.
+- **Example data:** the repository is public. Use invented institutions, course codes, people and addresses (`example.edu`), never real ones.
 
 ## Questions?
 
-[File an issue](https://github.com/fwdlibraries/stacks/issues) — we're happy to help.
+[File an issue](https://github.com/fwdlibraries/stacks/issues). We're happy to help.
