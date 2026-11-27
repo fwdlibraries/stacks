@@ -12,6 +12,12 @@ Stacks uses [Semantic Versioning](https://semver.org/).
 There's no release yet. Everything so far is listed here, grouped by area, with the pull request that added it.
 
 ### Changed
+- Sign-ins are server-side sessions:
+  - Refresh tokens work once and rotate, and reusing an old one ends the session.
+  - Logout ends the session at once.
+  - People can sign out their other sessions, and organization-wide administrators can sign someone out everywhere. Turning an account off does that too.
+  - Access tokens now last 15 minutes (`ACCESS_TOKEN_EXPIRE_MINUTES`, was 60).
+  - Existing sign-ins end with this upgrade (migration `b3d5f7a9c1e2`).
 - LTI tool private keys are encrypted at rest, like library API keys (migration `9a1f3c5e7b2d`). Back up `CREDENTIALS_KEY` (or `SECRET_KEY`, if it's unset), because the keys can't be read without it. The unused `LTI_PRIVATE_KEY_STORAGE` setting is removed.
 - New default look (#30):
   - Neutral greys, one blue accent and bundled Inter, with WCAG AA contrast throughout. This fixes the failing Slate link and Warm Grey text colours.

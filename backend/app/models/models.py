@@ -572,6 +572,28 @@ class UserIdentity(Base):
     user: Mapped[User] = relationship(back_populates="identities")
 
 
+class AuthSession(Base):
+    """One sign-in (app/services/auth_service.py). Access and refresh tokens name it
+    (`sid`), so revoking it ends them. Each refresh moves the session to a new
+    `generation`; a refresh token from an earlier generation means it was copied, and
+    revokes the session."""
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    method: Mapped[str] = mapped_column(Text, nullable=False)  # password / sso / lti
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # logout / signed_out_elsewhere / admin / account_off / reuse
+    revoked_reason: Mapped[str | None] = mapped_column(Text)
+
+
 class ApiKey(Base):
     __tablename__ = "api_keys"
 

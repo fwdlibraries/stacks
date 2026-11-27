@@ -16,6 +16,7 @@ import {
   useInvite,
   usePeople,
   useSetAccountActive,
+  useSignOutPerson,
   useTakeRole,
   type Person,
   type Scope,
@@ -139,7 +140,8 @@ function PersonRow({
   const give = useGiveRole();
   const take = useTakeRole();
   const active = useSetAccountActive();
-  const error = give.error || take.error || active.error;
+  const signOut = useSignOutPerson();
+  const error = give.error || take.error || active.error || signOut.error;
 
   const add = () => {
     const scope = scopes.find((s) => `${s.type}:${s.id}` === scopeKey);
@@ -170,15 +172,31 @@ function PersonRow({
           <div className="small text-body-secondary">{person.email}</div>
         </div>
         {canChangeAccounts && (
-          <Form.Check
-            type="switch"
-            id={`active-${person.id}`}
-            label="Account on"
-            checked={person.is_active}
-            onChange={(e) =>
-              active.mutate({ userId: person.id, is_active: e.target.checked })
-            }
-          />
+          <div className="d-flex flex-column align-items-end gap-1">
+            <Form.Check
+              type="switch"
+              id={`active-${person.id}`}
+              label="Account on"
+              checked={person.is_active}
+              onChange={(e) =>
+                active.mutate({ userId: person.id, is_active: e.target.checked })
+              }
+            />
+            {person.is_active && (
+              <Button
+                size="sm"
+                variant="link"
+                className="p-0 small"
+                disabled={signOut.isPending}
+                onClick={() => signOut.mutate(person.id)}
+                aria-label={`Sign ${person.display_name} out everywhere`}
+              >
+                {signOut.data
+                  ? `Signed out (${signOut.data.signed_out})`
+                  : "Sign out everywhere"}
+              </Button>
+            )}
+          </div>
         )}
       </div>
 

@@ -30,3 +30,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token: null, refreshToken: null })
   },
 }))
+
+// Keep every tab on the newest tokens. Refresh tokens work once, so a tab still holding
+// an old one would look like a stolen token, and the server would end the session.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === TOKEN_STORAGE_KEY || event.key === REFRESH_TOKEN_STORAGE_KEY || event.key === null) {
+      useAuthStore.setState({
+        token: localStorage.getItem(TOKEN_STORAGE_KEY),
+        refreshToken: localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY),
+      })
+    }
+  })
+}

@@ -3,6 +3,8 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.models import SsoConfig, User
+from app.models.models import AuthSession, SsoConfig, User
 from app.schemas.auth import (
     Capabilities,
     CurrentUser,
@@ -22,18 +24,23 @@ from app.schemas.auth import (
 )
 from app.services import tenancy
 from app.services.access import load_grants
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, TokenPair
 from app.services.ephemeral import EphemeralStore, get_ephemeral_store
 
 router = APIRouter()
+bearer = HTTPBearer(auto_error=False)
 
 
-def _issue_tokens(user: User) -> TokenResponse:
+def _tokens(pair: TokenPair) -> TokenResponse:
     return TokenResponse(
-        access_token=AuthService.create_token(user, "access"),
-        refresh_token=AuthService.create_token(user, "refresh"),
+        access_token=pair.access_token, refresh_token=pair.refresh_token,
         expires_in=settings.access_token_expire_minutes * 60,
     )
+
+
+async def _issue_tokens(db: AsyncSession, user: User, method: str) -> TokenResponse:
+    """Start a session (method: password / sso / lti) and return its tokens."""
+    return _tokens(await AuthService.start_session(db, user, method))
 
 
 def _failures_key(email: str) -> str:
@@ -84,16 +91,20 @@ async def local_login(
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Use your institution's sign-in for Stacks.")
     user.last_login_at = datetime.now(UTC)
-    return _issue_tokens(user)
+    return await _issue_tokens(db, user, "password")
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Logout")
-async def logout() -> Response:
-    """
-    Tokens are stateless JWTs, so logout is client-side: the client discards them.
-    Server-side revocation (a denylist keyed on `jti`) can be added later; changing
-    the password already invalidates all earlier tokens.
-    """
+async def logout(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """End this sign-in: its access and refresh tokens stop working at once. Works with
+    an expired access token too, so signing out never fails for that reason."""
+    if credentials is not None:
+        session = await AuthService.session_of(db, credentials.credentials)
+        if session is not None:
+            await AuthService.revoke(db, session, "logout")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -113,14 +124,15 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
 
 @router.post("/token/refresh", response_model=TokenResponse, summary="Refresh access token")
 async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    """Exchange a refresh token for a new access + refresh token pair."""
-    user = await AuthService.get_user_from_token(body.refresh_token, db, expected_type="refresh")
-    if user is None or not user.is_active:
+    """Exchange a refresh token for a new access + refresh token pair. Each refresh
+    token works once: using an old one again ends the session (it was copied)."""
+    result = await AuthService.refresh(db, body.refresh_token)
+    if result is None or not result[0].is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
-    return _issue_tokens(user)
+    return _tokens(result[1])
 
 
 @router.post("/lti/exchange", response_model=LtiExchangeResponse, summary="Exchange an LTI login code")
@@ -141,4 +153,57 @@ async def exchange_lti_code(
             detail="This sign-in link has expired. Open Stacks again from your course.",
         )
     user.last_login_at = datetime.now(UTC)
-    return LtiExchangeResponse(**_issue_tokens(user).model_dump(), next=record["next"])
+    tokens = await _issue_tokens(db, user, record.get("method", "lti"))
+    return LtiExchangeResponse(**tokens.model_dump(), next=record["next"])
+
+
+# ── Your sign-ins ────────────────────────────────────────────────────────────
+
+
+class SessionOut(BaseModel):
+    id: uuid.UUID
+    method: str
+    created_at: datetime
+    last_used_at: datetime | None
+    current: bool
+
+
+async def _current_session_id(db: AsyncSession, credentials: HTTPAuthorizationCredentials | None) -> uuid.UUID | None:
+    session = await AuthService.session_of(db, credentials.credentials) if credentials else None
+    return session.id if session else None
+
+
+@router.get("/sessions", response_model=list[SessionOut], summary="Where you're signed in")
+async def list_sessions(
+    user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+):
+    current = await _current_session_id(db, credentials)
+    rows = await db.scalars(
+        select(AuthSession)
+        .where(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None),
+               AuthSession.expires_at > datetime.now(UTC))
+        .order_by(AuthSession.last_used_at.desc().nulls_last())
+    )
+    return [SessionOut(id=s.id, method=s.method, created_at=s.created_at, last_used_at=s.last_used_at,
+                       current=s.id == current) for s in rows]
+
+
+@router.post("/sessions/sign-out-others", summary="Sign out everywhere else")
+async def sign_out_others(
+    user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    current = await _current_session_id(db, credentials)
+    return {"signed_out": await AuthService.revoke_all(db, user.id, "signed_out_elsewhere", except_id=current)}
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, summary="End one sign-in")
+async def end_session(session_id: uuid.UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    session = await db.get(AuthSession, session_id)
+    if session is None or session.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    await AuthService.revoke(db, session, "signed_out_elsewhere")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

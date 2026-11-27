@@ -1,5 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import { useAuthStore, type AuthTokens } from '@/stores/auth'
+import { REFRESH_TOKEN_STORAGE_KEY, useAuthStore, type AuthTokens } from '@/stores/auth'
 
 export const apiClient = axios.create({
   baseURL: '/api/v1',
@@ -22,7 +22,8 @@ apiClient.interceptors.request.use((config) => {
 let refreshInFlight: Promise<string | null> | null = null
 
 function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = useAuthStore.getState().refreshToken
+  // The newest refresh token, even if another tab just rotated it
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) ?? useAuthStore.getState().refreshToken
   if (!refreshToken) return Promise.resolve(null)
 
   refreshInFlight ??= axios
