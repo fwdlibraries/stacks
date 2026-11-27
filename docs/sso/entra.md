@@ -30,10 +30,10 @@ Stacks directly.
    - **Supported account types:** *Accounts in this organizational directory
      only* (single tenant).
    - **Redirect URI:** choose the **Web** platform and enter the address shown
-     under Administration → Sign-in in Stacks. For the test site, that is:
+     under Administration → Sign-in in Stacks. It looks like this:
 
      ```
-     https://stacks-dev.fwdlib.io/api/v1/auth/oidc/callback
+     https://stacks.library.example.edu/api/v1/auth/oidc/callback
      ```
 
 3. Select **Register**.
@@ -92,7 +92,7 @@ access to a single department, are never changed by this mapping.
   those.
 - **Client ID:** the Application (client) ID
 - **Client secret:** sent separately, through a secure channel
-- **Email domains** that may sign in, e.g. `csp.edu`
+- **Email domains** that may sign in, e.g. `example.edu`
 - **App role values**, if you created any
 
 ## Google Workspace and OpenAthens
