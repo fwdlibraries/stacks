@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.models import AuthSession, ScopeType
 from app.services import access
-from tests.test_api.test_auth import login, make_user
+from tests.test_api.test_auth import PASSWORD, login, make_user
 from tests.test_api.test_permissions import World, sign_in
 
 
@@ -126,3 +126,50 @@ async def test_administrators_can_sign_people_out(client, db_session):
     session = await db_session.get(AuthSession, uuid.UUID(sid))
     await db_session.refresh(session)
     assert session.revoked_reason == "account_off"
+
+
+# ── Refresh token as an HttpOnly cookie (Stacks in its own tab) ──────────────
+
+COOKIE_MODE = {"X-Stacks-Refresh": "cookie"}
+
+
+@pytest.fixture
+async def https_client(client: AsyncClient):
+    """Like `client`, over https: the refresh cookie is Secure, so http clients don't send it."""
+    async with AsyncClient(transport=client._transport, base_url="https://test") as ac:
+        yield ac
+
+
+async def test_cookie_mode_keeps_the_refresh_token_out_of_scripts_reach(https_client, db_session):
+    client = https_client
+    await make_user(db_session)
+    resp = await client.post(
+        "/api/v1/auth/local/login", json={"email": "librarian@example.edu", "password": PASSWORD}, headers=COOKIE_MODE
+    )
+    assert resp.status_code == 200
+    assert resp.json()["refresh_token"] is None
+    cookie = resp.headers["set-cookie"]
+    assert "stacks_refresh=" in cookie and "HttpOnly" in cookie and "SameSite=strict" in cookie
+    assert "Path=/api/v1/auth" in cookie
+
+    # Refreshing reads the cookie, rotates it, and still returns no refresh token
+    first = client.cookies.get("stacks_refresh")
+    again = await client.post("/api/v1/auth/token/refresh", headers=COOKIE_MODE)
+    assert again.status_code == 200 and again.json()["refresh_token"] is None
+    assert client.cookies.get("stacks_refresh") != first
+    assert await me(client, again.json()["access_token"]) == 200
+
+    # Without the header (e.g. a form posted from another site), the cookie isn't used
+    assert (await client.post("/api/v1/auth/token/refresh")).status_code == 401
+
+    # Logout with only the cookie (the in-memory access token is gone after a reload)
+    assert (await client.post("/api/v1/auth/logout")).status_code == 204
+    assert client.cookies.get("stacks_refresh") is None
+    assert await me(client, again.json()["access_token"]) == 401
+
+
+async def test_body_mode_is_unchanged_for_lms_frames(client, tokens):
+    assert tokens["refresh_token"]
+    resp = await refresh(client, tokens["refresh_token"])
+    assert resp.status_code == 200 and resp.json()["refresh_token"]
+    assert "set-cookie" not in resp.headers

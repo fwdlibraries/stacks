@@ -194,6 +194,12 @@ class AuthService:
         return await AuthService._session(db, claims) if claims else None
 
     @staticmethod
+    async def session_of_refresh(db: AsyncSession, refresh_token: str) -> AuthSession | None:
+        """The session a refresh token belongs to (for logout with only the cookie)."""
+        claims = AuthService.decode_token(refresh_token, "refresh", verify_exp=False)
+        return await AuthService._session(db, claims) if claims else None
+
+    @staticmethod
     async def _valid_user(db: AsyncSession, claims: dict) -> User | None:
         try:
             user_id = uuid.UUID(claims["sub"])

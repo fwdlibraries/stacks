@@ -6,7 +6,7 @@ import {
   useSearchParams,
   type Location,
 } from "react-router-dom";
-import { Alert, Button, Card, Container, Form } from "react-bootstrap";
+import { Alert, Button, Card, Container, Form, Spinner } from "react-bootstrap";
 import { isAxiosError } from "axios";
 import { useLogin, useSsoInfo } from "@/api/hooks/useAuth";
 import { apiErrorMessage } from "@/lib/apiError";
@@ -16,6 +16,7 @@ export default function LoginView() {
   const navigate = useNavigate();
   const location = useLocation();
   const token = useAuthStore((s) => s.token);
+  const restoring = useAuthStore((s) => s.status === "restoring");
   const login = useLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +32,13 @@ export default function LoginView() {
 
   if (token) {
     return <Navigate to={from} replace />;
+  }
+  if (restoring) {
+    return (
+      <Spinner animation="border" role="status" className="m-4">
+        <span className="visually-hidden">Loading…</span>
+      </Spinner>
+    );
   }
 
   const handleSubmit = (e: FormEvent) => {

@@ -2,7 +2,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -31,16 +31,57 @@ router = APIRouter()
 bearer = HTTPBearer(auto_error=False)
 
 
-def _tokens(pair: TokenPair) -> TokenResponse:
+# ── Where the refresh token goes ─────────────────────────────────────────────
+#
+# Stacks in its own tab asks for the refresh token as an HttpOnly cookie (header
+# X-Stacks-Refresh: cookie), so page scripts never see it; the access token lives only
+# in memory. Inside an LMS frame, browsers often block cookies, so the frontend takes
+# the refresh token in the response body instead and keeps it for that tab only.
+# The cookie is SameSite=Strict and only sent to /api/v1/auth, and refreshing from it
+# needs the custom header too, which other sites can't send without CORS approval.
+
+REFRESH_COOKIE = "stacks_refresh"
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+REFRESH_HEADER = "x-stacks-refresh"
+
+
+def wants_cookie(request: Request) -> bool:
+    return request.headers.get(REFRESH_HEADER, "").lower() == "cookie"
+
+
+def _set_refresh_cookie(request: Request, response: Response, token: str) -> None:
+    host = (request.url.hostname or "").lower()
+    response.set_cookie(
+        REFRESH_COOKIE, token,
+        max_age=settings.refresh_token_expire_days * 86400,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        samesite="strict",
+        # Plain http is only for local development
+        secure=host not in ("localhost", "127.0.0.1"),
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH, httponly=True, samesite="strict")
+
+
+def _tokens(pair: TokenPair, request: Request, response: Response) -> TokenResponse:
+    refresh = pair.refresh_token
+    if wants_cookie(request):
+        _set_refresh_cookie(request, response, refresh)
+        refresh = None
     return TokenResponse(
-        access_token=pair.access_token, refresh_token=pair.refresh_token,
+        access_token=pair.access_token, refresh_token=refresh,
         expires_in=settings.access_token_expire_minutes * 60,
     )
 
 
-async def _issue_tokens(db: AsyncSession, user: User, method: str) -> TokenResponse:
+async def _issue_tokens(
+    db: AsyncSession, user: User, method: str, request: Request, response: Response
+) -> TokenResponse:
     """Start a session (method: password / sso / lti) and return its tokens."""
-    return _tokens(await AuthService.start_session(db, user, method))
+    return _tokens(await AuthService.start_session(db, user, method), request, response)
 
 
 def _failures_key(email: str) -> str:
@@ -51,6 +92,8 @@ def _failures_key(email: str) -> str:
 @router.post("/local/login", response_model=TokenResponse, summary="Local email/password login")
 async def local_login(
     body: LoginRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     store: EphemeralStore = Depends(get_ephemeral_store),
     tenant: tenancy.Tenant | None = Depends(tenancy.get_tenant),
@@ -91,21 +134,26 @@ async def local_login(
     ):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Use your institution's sign-in for Stacks.")
     user.last_login_at = datetime.now(UTC)
-    return await _issue_tokens(db, user, "password")
+    return await _issue_tokens(db, user, "password", request, response)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Logout")
 async def logout(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """End this sign-in: its access and refresh tokens stop working at once. Works with
-    an expired access token too, so signing out never fails for that reason."""
-    if credentials is not None:
-        session = await AuthService.session_of(db, credentials.credentials)
-        if session is not None:
-            await AuthService.revoke(db, session, "logout")
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    an expired access token, or with only the refresh cookie, so signing out never fails
+    for that reason."""
+    session = await AuthService.session_of(db, credentials.credentials) if credentials else None
+    if session is None and (cookie := request.cookies.get(REFRESH_COOKIE)):
+        session = await AuthService.session_of_refresh(db, cookie)
+    if session is not None:
+        await AuthService.revoke(db, session, "logout")
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _clear_refresh_cookie(response)
+    return response
 
 
 @router.get("/me", response_model=CurrentUser, summary="Current user")
@@ -123,21 +171,29 @@ async def get_me(current_user: User = Depends(get_current_user), db: AsyncSessio
 
 
 @router.post("/token/refresh", response_model=TokenResponse, summary="Refresh access token")
-async def refresh_token(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
-    """Exchange a refresh token for a new access + refresh token pair. Each refresh
-    token works once: using an old one again ends the session (it was copied)."""
-    result = await AuthService.refresh(db, body.refresh_token)
+async def refresh_token(
+    request: Request, response: Response, body: RefreshRequest | None = None, db: AsyncSession = Depends(get_db),
+):
+    """Exchange a refresh token (in the body, or the refresh cookie with
+    X-Stacks-Refresh: cookie) for a new pair. Each refresh token works once: using an
+    old one again ends the session (it was copied)."""
+    token = body.refresh_token if body and body.refresh_token else None
+    if token is None and wants_cookie(request):
+        token = request.cookies.get(REFRESH_COOKIE)
+    result = await AuthService.refresh(db, token) if token else None
     if result is None or not result[0].is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
-    return _tokens(result[1])
+    return _tokens(result[1], request, response)
 
 
 @router.post("/lti/exchange", response_model=LtiExchangeResponse, summary="Exchange an LTI login code")
 async def exchange_lti_code(
     body: LtiCodeExchange,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     store: EphemeralStore = Depends(get_ephemeral_store),
 ):
@@ -153,7 +209,7 @@ async def exchange_lti_code(
             detail="This sign-in link has expired. Open Stacks again from your course.",
         )
     user.last_login_at = datetime.now(UTC)
-    tokens = await _issue_tokens(db, user, record.get("method", "lti"))
+    tokens = await _issue_tokens(db, user, record.get("method", "lti"), request, response)
     return LtiExchangeResponse(**tokens.model_dump(), next=record["next"])
 
 

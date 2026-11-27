@@ -12,10 +12,10 @@ import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 // Signed in: the current-user query only runs with a session
-beforeEach(() => useAuthStore.setState({ token: 'session', refreshToken: 'r' }))
+beforeEach(() => useAuthStore.setState({ token: 'session', status: 'signed_in' }))
 afterEach(() => {
   vi.restoreAllMocks()
-  useAuthStore.setState({ token: null, refreshToken: null })
+  useAuthStore.setState({ token: null, status: 'signed_out' })
 })
 
 const ME = (manage: boolean, people = manage, reports = manage) => ({
