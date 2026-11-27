@@ -13,7 +13,7 @@ from app.database import get_db
 from app.dependencies import require_permission
 from app.models.models import LtiDeployment, LtiPlatform, LtiUserMapping, User
 from app.services import tenancy
-from app.services.lti_service import generate_tool_keys
+from app.services.lti_service import new_tool_keys
 
 router = APIRouter()
 manage_settings = require_permission("settings.manage")
@@ -159,11 +159,10 @@ async def register_lms(body: PlatformIn, user: User = Depends(manage_settings), 
     )
     if taken:
         raise HTTPException(status.HTTP_409_CONFLICT, "That LMS registration (issuer and client ID) already exists")
-    private_pem, public_pem = generate_tool_keys()
     platform = LtiPlatform(
         organization_id=user.organization_id, issuer=body.issuer, client_id=body.client_id,
         auth_login_url=body.auth_login_url, auth_token_url=body.auth_token_url, jwks_url=body.jwks_url,
-        tool_private_key=private_pem, tool_public_key=public_pem, tool_key_id=uuid.uuid4().hex,
+        **new_tool_keys(),
     )
     db.add(platform)
     await db.flush()

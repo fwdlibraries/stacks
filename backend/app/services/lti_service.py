@@ -27,7 +27,7 @@ from app.models.models import (
     ReadingList,
     User,
 )
-from app.services import terms
+from app.services import credentials, terms
 
 LTI_CLAIM = "https://purl.imsglobal.org/spec/lti/claim/"
 CLAIM_MESSAGE_TYPE = LTI_CLAIM + "message_type"
@@ -378,6 +378,27 @@ def generate_tool_keys() -> tuple[str, str]:
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
     ).decode()
     return private_pem, public_pem
+
+
+def new_tool_keys() -> dict[str, str]:
+    """LtiPlatform fields for a new signing key: the private key encrypted at rest."""
+    private_pem, public_pem = generate_tool_keys()
+    return {
+        "tool_private_key_encrypted": credentials.encrypt(private_pem),
+        "tool_public_key": public_pem,
+        "tool_key_id": uuid.uuid4().hex,
+    }
+
+
+def tool_private_key(platform: LtiPlatform) -> str:
+    """The platform registration's private signing key (PEM), for signing messages to the LMS."""
+    try:
+        return credentials.decrypt(platform.tool_private_key_encrypted)
+    except credentials.CredentialError as exc:
+        raise credentials.CredentialError(
+            f"The signing key for {platform.issuer} can't be decrypted; CREDENTIALS_KEY or SECRET_KEY "
+            "may have changed. Restore the old key, or register Stacks with the LMS again."
+        ) from exc
 
 
 def product_family(claims: dict) -> str | None:

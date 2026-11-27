@@ -12,6 +12,7 @@ Stacks uses [Semantic Versioning](https://semver.org/).
 There's no release yet. Everything so far is listed here, grouped by area, with the pull request that added it.
 
 ### Changed
+- LTI tool private keys are encrypted at rest, like library API keys (migration `9a1f3c5e7b2d`). Back up `CREDENTIALS_KEY` (or `SECRET_KEY`, if it's unset), because the keys can't be read without it. The unused `LTI_PRIVATE_KEY_STORAGE` setting is removed.
 - New default look (#30):
   - Neutral greys, one blue accent and bundled Inter, with WCAG AA contrast throughout. This fixes the failing Slate link and Warm Grey text colours.
   - Organizations on Custom keep their saved colours, and the classic serif fonts are still offered there.

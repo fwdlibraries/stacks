@@ -210,7 +210,7 @@ async def test_auto_on_the_site(client, db_session, uni):
 
     db_session.add(LtiPlatform(organization_id=uni.id, issuer="https://uni.instructure.com", client_id="c",
                                auth_login_url="https://x/a", auth_token_url="https://x/t", jwks_url="https://x/j",
-                               tool_private_key="k", tool_public_key="k", tool_key_id="k", product_family="canvas"))
+                               tool_private_key_encrypted="k", tool_public_key="k", tool_key_id="k", product_family="canvas"))
     uni.settings = {"theme": {"mode": "lms", "lms": "auto"}}
     await db_session.commit()
     css = (await client.get("/api/v1/tenant/theme.css", headers={"Host": "stacks.uni.edu"})).text
