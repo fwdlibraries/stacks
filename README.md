@@ -107,6 +107,10 @@ Migrations never run on startup, so run `alembic upgrade head` after each upgrad
 
 A Helm chart for Kubernetes is planned.
 
+## Security
+
+Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md). It also explains how Stacks protects data, its known limitations, and how to run it securely.
+
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started, and the [style guide](docs/design/style-guide.md) for the interface and wording.
