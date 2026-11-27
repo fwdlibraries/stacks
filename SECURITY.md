@@ -52,6 +52,7 @@ This section is for people deciding whether to run Stacks, and for reviewers.
   - Access tokens last 15 minutes.
   - Each refresh token works once. If an old one is used again, it was copied, and the whole session ends.
   - Logout ends the session at once. People can sign out their other sessions, and administrators can sign someone out everywhere. Turning an account off does the same.
+  - The access token is held in memory only. In its own tab, Stacks keeps the refresh token in an HttpOnly, Secure, SameSite=Strict cookie that page scripts can't read.
 - **Browser extension tokens** have a limited scope: they can list reading lists and add citations, nothing else. Only their SHA-256 hash is stored, and each token is shown once, when it's created.
 
 **Who sees what**
@@ -74,12 +75,10 @@ This section is for people deciding whether to run Stacks, and for reviewers.
 
 We'd rather state these than have you find them:
 
-- **Sign-in tokens are kept in the browser's `localStorage`.** If an attacker could run script on a Stacks page, they could read the tokens and use them until the session is revoked. Three things limit this:
+- **Inside an LMS frame, the refresh token is readable by scripts on the page.** Browsers often block cookies in frames, so there it's kept in `sessionStorage`: that tab only, and gone when the tab closes. Three things limit the risk:
   - the Content-Security-Policy makes injecting script hard;
-  - access tokens last 15 minutes;
-  - refresh tokens work once, so using a stolen one is detected the next time the real person's tab refreshes.
-
-  Moving tokens out of `localStorage` is planned.
+  - refresh tokens work once, so using a stolen one ends the session;
+  - access tokens last 15 minutes.
 - **CI doesn't scan dependencies or secrets yet.**
 - **Nobody outside the project has audited Stacks.** It's pre-release software.
 
