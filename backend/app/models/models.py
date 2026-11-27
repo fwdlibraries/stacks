@@ -222,6 +222,105 @@ class ListSection(Base):
     citations: Mapped[list["Citation"]] = relationship(back_populates="section", order_by="Citation.sort_order")
 
 
+# ─── Rollover (app/services/rollover.py, docs/design/rollover.md) ─────────────
+
+class Primary(Base):
+    """A course variant's primary shell, e.g. GEO101_OL_TER_PRIMARY: where edits happen in
+    the primary model. `code` is stored upper case; mode and length come from the
+    organization's primary code pattern."""
+    __tablename__ = "primaries"
+    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_primaries_organization_code"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    course_template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str | None] = mapped_column(Text)
+    mode: Mapped[str | None] = mapped_column(Text)  # e.g. F2F / OL
+    length: Mapped[str | None] = mapped_column(Text)  # e.g. SEM / TER
+    # From the LMS export of primary shells
+    lms_org_unit_id: Mapped[str | None] = mapped_column(Text)
+    lms_department: Mapped[str | None] = mapped_column(Text)
+    reading_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("reading_lists.id", ondelete="SET NULL")
+    )
+    # How Stacks learned of it: 'import' (list of primary shells), 'file' (a loader file
+    # named it), 'manual'
+    origin: Mapped[str] = mapped_column(Text, nullable=False, default="import")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    template: Mapped[CourseTemplate] = relationship()
+
+
+class RolloverItem(Base):
+    """One live section in an upcoming term's rollover: where its list will come from,
+    and its review status (needs_source → in_review → approved, or skipped)."""
+    __tablename__ = "rollover_items"
+    __table_args__ = (UniqueConstraint("term_id", "course_offering_id", name="uq_rollover_items_term_offering"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    term_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("terms.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    course_offering_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_offerings.id", ondelete="CASCADE"), nullable=False
+    )
+    primary_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("primaries.id", ondelete="SET NULL"), index=True
+    )
+    # Which rule found the primary: manual / file / remembered / rule / only_one
+    match_source: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="needs_source", server_default="needs_source")
+    # Section details from the import
+    part_of_term: Mapped[str | None] = mapped_column(Text)
+    length: Mapped[str | None] = mapped_column(Text)
+    mode: Mapped[str | None] = mapped_column(Text)
+    department: Mapped[str | None] = mapped_column(Text)
+    instructors: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    file_primary_code: Mapped[str | None] = mapped_column(Text)  # the loader file's OLD_COURSE_CODE
+    problems: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    row: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    notes: Mapped[str | None] = mapped_column(Text)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    offering: Mapped[CourseOffering] = relationship()
+    primary: Mapped["Primary | None"] = relationship()
+
+
+class RememberedMatch(Base):
+    """A librarian's choice of primary for a course variant, reused in later terms.
+    `length` and `mode` are '' when the section didn't say."""
+    __tablename__ = "remembered_matches"
+    __table_args__ = (
+        UniqueConstraint("course_template_id", "length", "mode", name="uq_remembered_matches_variant"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    course_template_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("course_templates.id", ondelete="CASCADE"), nullable=False
+    )
+    length: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    primary_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("primaries.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    template: Mapped[CourseTemplate] = relationship()
+    primary: Mapped[Primary] = relationship()
+
+
 class OfferingListOverride(Base):
     __tablename__ = "offering_list_overrides"
 

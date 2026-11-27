@@ -10,6 +10,7 @@ from app.routers import (
     admin_lms,
     admin_people,
     admin_reports,
+    admin_rollover,
     admin_terms,
     auth,
     auth_oidc,
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_people.router, prefix="/api/v1/admin",  tags=["Admin"])
     app.include_router(admin_reports.router, prefix="/api/v1/admin", tags=["Admin"])
     app.include_router(admin_terms.router, prefix="/api/v1/admin",   tags=["Admin"])
+    app.include_router(admin_rollover.router, prefix="/api/v1/admin", tags=["Admin"])
     app.include_router(health.router,    prefix="/api/v1/health",    tags=["Health"])
 
     # Unauthenticated student list view

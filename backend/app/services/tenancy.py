@@ -41,6 +41,8 @@ class OrgSettings(BaseModel):
     logo: dict | None = None
     # How live LMS course shells are coded, e.g. "{crn}.{term}" (app/services/terms.py)
     section_code_pattern: str | None = None
+    # How rollover reads imports and primary codes (rollover.RolloverSettings, validated when saved)
+    rollover: dict | None = None
 
     @field_validator("section_code_pattern")
     @classmethod
