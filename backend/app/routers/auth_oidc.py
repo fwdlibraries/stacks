@@ -96,5 +96,5 @@ async def callback(
         return _back_to_login(str(exc))
     code = secrets.token_urlsafe(32)
     # The same one-time code hand-off as LTI launches (/launch exchanges it for tokens)
-    await store.put(f"lti:code:{code}", {"user_id": str(user.id), "next": record["next"]}, LOGIN_CODE_TTL_SECONDS)
+    await store.put(f"lti:code:{code}", {"user_id": str(user.id), "next": record["next"], "method": "sso"}, LOGIN_CODE_TTL_SECONDS)
     return RedirectResponse(f"/launch?code={code}", status_code=303)

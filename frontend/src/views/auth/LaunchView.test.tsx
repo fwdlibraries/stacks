@@ -26,7 +26,7 @@ describe('LaunchView', () => {
     expect(await screen.findByText('List page')).toBeInTheDocument()
     expect(post).toHaveBeenCalledTimes(1)
     expect(post).toHaveBeenCalledWith('/auth/lti/exchange', { code: 'abc' })
-    expect(useAuthStore.getState()).toMatchObject({ token: 'a', refreshToken: 'r' })
+    expect(useAuthStore.getState()).toMatchObject({ token: 'a', status: 'signed_in' })
     expect(screen.getByTestId('location')).toHaveTextContent('/lists/l1')
   })
 

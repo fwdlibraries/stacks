@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores/auth'
 /**
  * WebSocket client for real-time collaboration.
  *
@@ -64,7 +65,7 @@ class StacksWebSocket {
   private _connect() {
     if (!this.listId) return
 
-    const token = localStorage.getItem('stacks_token')
+    const token = useAuthStore.getState().token
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = `${protocol}//${window.location.host}/api/v1/ws/lists/${this.listId}?token=${token}`
 

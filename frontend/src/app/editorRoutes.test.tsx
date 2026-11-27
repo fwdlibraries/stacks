@@ -51,7 +51,7 @@ describe('editor routes', () => {
       email: 'librarian@example.edu',
       password: 'correct horse',
     })
-    expect(useAuthStore.getState().refreshToken).toBe('r')
+    expect(useAuthStore.getState()).toMatchObject({ token: 'a', status: 'signed_in' })
     expect(await screen.findByText(/Test Librarian · Demo University/)).toBeInTheDocument()
   })
 

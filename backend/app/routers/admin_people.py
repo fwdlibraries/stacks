@@ -28,6 +28,7 @@ from app.models.models import (
     UserRoleAssignment,
 )
 from app.services import access
+from app.services.auth_service import AuthService
 
 router = APIRouter()
 
@@ -297,6 +298,21 @@ async def update_account(
     if person.is_system_admin and not grants.system_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "System administrators are managed by your Stacks provider")
     person.is_active = body.is_active
+    if not body.is_active:
+        await AuthService.revoke_all(db, person.id, "account_off")
     await db.flush()
     page = await people(q=person.email, offset=0, limit=100, grants=grants, db=db)
     return next(p for p in page.people if p.id == person.id)
+
+
+@router.post("/people/{user_id}/sign-out", summary="Sign someone out everywhere")
+async def sign_out_person(
+    user_id: uuid.UUID, grants: access.Grants = Depends(people_manager), db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Ends all their sign-ins (e.g. a lost laptop). Needs people.manage organization-wide."""
+    if not grants.organization_wide("people.manage"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only organization-wide administrators can sign people out")
+    person = await _person(db, grants, user_id)
+    if person.is_system_admin and not grants.system_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "System administrators are managed by your Stacks provider")
+    return {"signed_out": await AuthService.revoke_all(db, person.id, "admin")}

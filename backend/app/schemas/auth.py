@@ -9,12 +9,14 @@ class LoginRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    # Omitted when the browser holds it in the refresh cookie (X-Stacks-Refresh: cookie)
+    refresh_token: str | None = None
 
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
+    # None when it was set as an HttpOnly cookie instead (X-Stacks-Refresh: cookie)
+    refresh_token: str | None
     token_type: str = "bearer"
     expires_in: int  # seconds until the access token expires
 

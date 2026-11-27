@@ -39,19 +39,34 @@ afterEach(() => {
 
 describe('apiClient 401 handling', () => {
   it('refreshes the access token once and retries the request', async () => {
-    useAuthStore.getState().setTokens({ access_token: 'old', refresh_token: 'r1' })
+    // In its own tab: the refresh token is an HttpOnly cookie the browser sends
+    useAuthStore.getState().setTokens({ access_token: 'old', refresh_token: null })
     const seen = fakeServer('old')
     const refresh = vi
       .spyOn(axios, 'post')
-      .mockResolvedValue({ data: { access_token: 'new', refresh_token: 'r2' } })
+      .mockResolvedValue({ data: { access_token: 'new', refresh_token: null } })
 
     const resp = await apiClient.get('/lists')
 
     expect(resp.data).toEqual({ ok: true })
     expect(seen).toEqual(['Bearer old', 'Bearer new'])
     expect(refresh).toHaveBeenCalledTimes(1)
-    expect(refresh).toHaveBeenCalledWith('/api/v1/auth/token/refresh', { refresh_token: 'r1' })
-    expect(useAuthStore.getState()).toMatchObject({ token: 'new', refreshToken: 'r2' })
+    expect(refresh).toHaveBeenCalledWith('/api/v1/auth/token/refresh', {}, { headers: { 'X-Stacks-Refresh': 'cookie' } })
+    expect(useAuthStore.getState()).toMatchObject({ token: 'new', status: 'signed_in' })
+  })
+
+  it('in an LMS frame, refreshes with the token kept for this tab', async () => {
+    vi.spyOn(window, 'top', 'get').mockReturnValue({} as Window)
+    useAuthStore.getState().setTokens({ access_token: 'old', refresh_token: 'r1' })
+    fakeServer('old')
+    const refresh = vi
+      .spyOn(axios, 'post')
+      .mockResolvedValue({ data: { access_token: 'new', refresh_token: 'r2' } })
+
+    await apiClient.get('/lists')
+
+    expect(refresh).toHaveBeenCalledWith('/api/v1/auth/token/refresh', { refresh_token: 'r1' }, { headers: {} })
+    expect(sessionStorage.getItem('stacks_refresh_token')).toBe('r2')
   })
 
   it('shares one refresh between concurrent 401s', async () => {

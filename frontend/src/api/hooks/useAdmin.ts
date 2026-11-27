@@ -395,6 +395,14 @@ export function useSetAccountActive() {
   );
 }
 
+/** End all of someone's sign-ins (e.g. a lost laptop) */
+export function useSignOutPerson() {
+  return useMutation({
+    mutationFn: async (userId: string) =>
+      (await apiClient.post<{ signed_out: number }>(`/admin/people/${userId}/sign-out`)).data,
+  });
+}
+
 // ── Reports ────────────────────────────────────────────────────────────────
 
 interface CitationRow {

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     s3_presigned_url_expiry: int = 900  # 15 minutes
 
     # Auth
-    access_token_expire_minutes: int = 60
+    access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
     algorithm: str = "HS256"
     # Failed password sign-ins allowed per account before it's paused, and for how
