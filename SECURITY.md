@@ -48,6 +48,10 @@ This section is for people deciding whether to run Stacks, and for reviewers.
   - For Entra, it only accepts your own tenant's issuer, and checks the tenant ID in every token.
   - It can require multi-factor sign-in, checked through the `amr` claim.
 - **LTI 1.3 launches** are checked against the platform's published keys (JWKS). Stacks then checks the issuer, audience, expiry, nonce, LTI version, message type and deployment.
+- **Sign-in sessions** are kept on the server, so they can be revoked:
+  - Access tokens last 15 minutes.
+  - Each refresh token works once. If an old one is used again, it was copied, and the whole session ends.
+  - Logout ends the session at once. People can sign out their other sessions, and administrators can sign someone out everywhere. Turning an account off does the same.
 - **Browser extension tokens** have a limited scope: they can list reading lists and add citations, nothing else. Only their SHA-256 hash is stored, and each token is shown once, when it's created.
 
 **Who sees what**
@@ -55,7 +59,7 @@ This section is for people deciding whether to run Stacks, and for reviewers.
 - Roles can apply to the whole organization, a college, a department or a single course. Lists outside someone's scope return "not found", so the response doesn't reveal that they exist.
 
 **Secrets**
-- Library API keys (Alma, Primo, LibKey) and single sign-on client secrets are encrypted in the database. The encryption key is `CREDENTIALS_KEY`, or one derived from `SECRET_KEY` if that's empty.
+- Library API keys (Alma, Primo, LibKey), single sign-on client secrets and each LMS registration's private signing key are encrypted in the database. The encryption key is `CREDENTIALS_KEY`, or one derived from `SECRET_KEY` if that's empty.
 - The key is never sent back to the browser.
 
 **Browser and LMS**
@@ -70,14 +74,18 @@ This section is for people deciding whether to run Stacks, and for reviewers.
 
 We'd rather state these than have you find them:
 
-- **LTI tool private keys are stored unencrypted in the database.** The `LTI_PRIVATE_KEY_STORAGE` setting is not used yet. Treat database backups as secret. Encrypting these keys is planned.
-- **Sign-in tokens are kept in the browser's `localStorage`.** If an attacker could run script on a Stacks page, they could read the token. The Content-Security-Policy is the main protection against that.
+- **Sign-in tokens are kept in the browser's `localStorage`.** If an attacker could run script on a Stacks page, they could read the tokens and use them until the session is revoked. Three things limit this:
+  - the Content-Security-Policy makes injecting script hard;
+  - access tokens last 15 minutes;
+  - refresh tokens work once, so using a stolen one is detected the next time the real person's tab refreshes.
+
+  Moving tokens out of `localStorage` is planned.
 - **CI doesn't scan dependencies or secrets yet.**
 - **Nobody outside the project has audited Stacks.** It's pre-release software.
 
 ## Running Stacks securely
 
-- **Secrets:** set a long random `SECRET_KEY`, and a separate `CREDENTIALS_KEY` (`python -m app.cli generate-credentials-key`). Keep a copy of `CREDENTIALS_KEY`: without it, stored API keys and client secrets can't be decrypted.
+- **Secrets:** set a long random `SECRET_KEY`, and a separate `CREDENTIALS_KEY` (`python -m app.cli generate-credentials-key`). Keep a copy of `CREDENTIALS_KEY`: without it, stored API keys, client secrets and LMS signing keys can't be decrypted.
 - **HTTPS:** serve Stacks only over HTTPS, and set `PUBLIC_BASE_URL` to its https address.
 - **Debug settings:** keep `DEBUG=false`, `SQL_ECHO=false` (with it on, SQL logs include secrets) and `OIDC_ALLOW_HTTP=false`.
 - **Hosting several organizations:** set `REQUIRE_KNOWN_HOST=true`.
