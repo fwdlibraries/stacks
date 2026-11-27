@@ -16,6 +16,7 @@ Stacks uses [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Terms (rollover stage 1, see docs/design/rollover.md): Administration › Terms manages teaching terms (code, name, dates, rollover and lists-due dates), and an LMS course code pattern such as `{crn}.{term}` lets launches find their term and section. Each term of a course can have its own reading list: "Copy to another term" in the editor makes a draft copy that keeps each item's identity across terms. Existing lists stay shared by every term, as before.
+- Rollover workspace, first part (rollover stage 2): Administration › Rollover imports a term's sections from an Alma/Leganto course loader file and a list of primary shells, then finds each section's primary (loader file's `OLD_COURSE_CODE`, a remembered choice, a code rule, or the course's only primary of that length). Sections it can't match wait under "Needs a source"; librarians choose a primary (remembered for later terms), approve or skip, singly or in bulk. Column names, the primary code pattern and the part-of-term → length table are organization settings.
 - Initial project scaffold
 - Database schema for org hierarchy, reading lists, citations, users, LTI
 - FastAPI backend with health endpoints

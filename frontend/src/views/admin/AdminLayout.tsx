@@ -2,7 +2,7 @@ import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import { Alert, Nav, Spinner } from "react-bootstrap";
 import { useCurrentUser } from "@/api/hooks/useAuth";
 
-type Need = "settings" | "people" | "reports";
+type Need = "settings" | "courses" | "people" | "reports";
 
 /** The sidebar, in order. Each page needs one permission. */
 const SECTIONS: { group: string; need: Need; pages: { to: string; label: string }[] }[] = [
@@ -19,6 +19,7 @@ const SECTIONS: { group: string; need: Need; pages: { to: string; label: string 
       { to: "/admin/lms", label: "LMS" },
     ],
   },
+  { group: "Courses", need: "courses", pages: [{ to: "/admin/rollover", label: "Rollover" }] },
   { group: "People", need: "people", pages: [{ to: "/admin/people", label: "People" }] },
   { group: "Insights", need: "reports", pages: [{ to: "/admin/reports", label: "Reports" }] },
 ];
@@ -38,6 +39,7 @@ export default function AdminLayout() {
   }
   const can: Record<Need, boolean> = {
     settings: Boolean(user?.can?.manage_settings),
+    courses: Boolean(user?.can?.manage_courses),
     people: Boolean(user?.can?.manage_people),
     reports: Boolean(user?.can?.view_reports),
   };

@@ -17,6 +17,7 @@ import ReportsView from "@/views/admin/ReportsView";
 import LookAndFeelView from "@/views/admin/LookAndFeelView";
 import SignInView from "@/views/admin/SignInView";
 import TermsView from "@/views/admin/TermsView";
+import RolloverView from "@/views/admin/RolloverView";
 
 /** Routes for the editor SPA (index.html). Student URLs under /public/ use public.html. */
 export const editorRoutes: RouteObject[] = [
@@ -42,6 +43,7 @@ export const editorRoutes: RouteObject[] = [
           { path: "look", element: <LookAndFeelView /> },
           { path: "signin", element: <SignInView /> },
           { path: "terms", element: <TermsView /> },
+          { path: "rollover", element: <RolloverView /> },
           { path: "connections", element: <ConnectionsView /> },
           { path: "links", element: <LinkResolutionView /> },
           { path: "lms", element: <LmsView /> },
