@@ -36,7 +36,7 @@ def upgrade() -> None:
         sa.Column("lms_department", sa.Text()),
         sa.Column("reading_list_id", sa.UUID(), sa.ForeignKey("reading_lists.id", ondelete="SET NULL")),
         sa.Column("origin", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint("organization_id", "code", name="uq_primaries_organization_code"),
     )
     op.create_index("ix_primaries_organization_id", "primaries", ["organization_id"])
@@ -63,8 +63,8 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text()),
         sa.Column("decided_by", sa.UUID(), sa.ForeignKey("users.id", ondelete="SET NULL")),
         sa.Column("decided_at", sa.DateTime(timezone=True)),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint("term_id", "course_offering_id", name="uq_rollover_items_term_offering"),
     )
     op.create_index("ix_rollover_items_term_id", "rollover_items", ["term_id"])
@@ -81,7 +81,7 @@ def upgrade() -> None:
         sa.Column("mode", sa.Text(), nullable=False, server_default=""),
         sa.Column("primary_id", sa.UUID(), sa.ForeignKey("primaries.id", ondelete="CASCADE"), nullable=False),
         sa.Column("created_by", sa.UUID(), sa.ForeignKey("users.id", ondelete="SET NULL")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint("course_template_id", "length", "mode", name="uq_remembered_matches_variant"),
     )
     op.create_index("ix_remembered_matches_organization_id", "remembered_matches", ["organization_id"])
